@@ -24,6 +24,14 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  seatActionError: {
+    type: String,
+    default: "",
+  },
+  isSeatPending: {
+    type: Function,
+    required: true,
+  },
 });
 
 const emit = defineEmits(["toggle-seat"]);
@@ -52,16 +60,20 @@ const formatDuration = (seconds) => {
       </div>
     </div>
 
+    <p v-if="props.seatActionError" class="seats-panel__error">
+      {{ props.seatActionError }}
+    </p>
+
     <div class="seats-grid">
       <article
         v-for="seat in props.seats"
-        :key="seat.id"
+        :key="seat.seatId ?? seat.id"
         class="panel-card card-lift seat-card"
         :class="{ 'is-active': seat.occupied }"
       >
         <div class="seat-card__head">
           <div class="seat-card__title-group">
-            <h3 class="seat-card__title">{{ props.seatLabel(seat.id) }}</h3>
+            <h3 class="seat-card__title">{{ props.seatLabel(seat.id ?? seat.seatId) }}</h3>
             <p class="seat-card__status" :class="{ 'is-active': seat.occupied }">
               {{ props.seatStatusText(seat) }}
             </p>
@@ -79,15 +91,22 @@ const formatDuration = (seconds) => {
           <div class="seat-card__meta-row">
             <span class="seat-card__meta-label">已使用时长</span>
             <strong class="seat-card__meta-value seat-card__mono">
-              {{ seat.occupied ? formatDuration(seat.seconds) : "00:00:00" }}
+              {{ seat.tracking ? formatDuration(seat.seconds) : "00:00:00" }}
             </strong>
           </div>
         </div>
 
         <div class="seat-card__power">
           <span class="seat-card__power-label">台灯 / 电源</span>
-          <button class="seat-card__switch" :class="{ 'is-on': seat.power }" type="button" @click="toggleSeat(seat)">
-            {{ seat.power ? "电源开" : "电源关" }}
+          <button
+            class="seat-card__switch"
+            :class="{ 'is-on': seat.power, 'is-pending': props.isSeatPending(seat) }"
+            :disabled="props.isSeatPending(seat)"
+            :aria-busy="props.isSeatPending(seat)"
+            type="button"
+            @click="toggleSeat(seat)"
+          >
+            {{ props.isSeatPending(seat) ? "处理中" : seat.power ? "电源开" : "电源关" }}
           </button>
         </div>
 
@@ -129,6 +148,17 @@ const formatDuration = (seconds) => {
 .seats-panel__summary span {
   color: #6ee7b7;
   font-weight: 700;
+}
+
+.seats-panel__error {
+  margin: -2px 0 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  background: rgba(127, 29, 29, 0.16);
+  color: #fecaca;
+  font-size: 0.8rem;
+  line-height: 1.45;
 }
 
 .seats-grid {
@@ -265,12 +295,24 @@ const formatDuration = (seconds) => {
   background: rgba(30, 41, 59, 0.9);
   color: #cbd5e1;
   cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
 }
 
 .seat-card__switch.is-on {
   border-color: rgba(16, 185, 129, 0.22);
   background: rgba(16, 185, 129, 0.14);
   color: #d1fae5;
+}
+
+.seat-card__switch.is-pending,
+.seat-card__switch:disabled {
+  cursor: wait;
+  opacity: 0.78;
+  pointer-events: none;
 }
 
 .seat-card__charge {
@@ -331,6 +373,12 @@ const formatDuration = (seconds) => {
   .seats-panel__summary {
     font-size: 0.9rem;
     line-height: 1.35;
+  }
+
+  .seats-panel__error {
+    margin-bottom: 10px;
+    padding: 9px 11px;
+    font-size: 0.74rem;
   }
 
   .seats-grid {
@@ -400,7 +448,7 @@ const formatDuration = (seconds) => {
     min-width: 30px;
     min-height: 36px;
     padding: 0 10px;
-    margin-right:-6px;
+    margin-right: -6px;
     font-size: 0.74rem;
   }
 
