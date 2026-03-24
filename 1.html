@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartLab IoT Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          boxShadow: {
+            glass: "0 20px 50px rgba(15, 23, 42, 0.35)",
+          },
+          keyframes: {
+            scan: {
+              "0%": { transform: "translateY(-100%)" },
+              "100%": { transform: "translateY(300%)" },
+            },
+            pulseGlow: {
+              "0%, 100%": { opacity: 0.45 },
+              "50%": { opacity: 0.9 },
+            },
+            floatUp: {
+              "0%, 100%": { transform: "translateY(0px)" },
+              "50%": { transform: "translateY(-4px)" },
+            },
+          },
+          animation: {
+            scan: "scan 3s linear infinite",
+            pulseGlow: "pulseGlow 2s ease-in-out infinite",
+            floatUp: "floatUp 4s ease-in-out infinite",
+          },
+        },
+      },
+    };
+  </script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    body {
+      background:
+        radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 28%),
+        radial-gradient(circle at top right, rgba(16, 185, 129, 0.1), transparent 24%),
+        radial-gradient(circle at bottom, rgba(14, 165, 233, 0.08), transparent 30%),
+        #020617;
+    }
+
+    .glass {
+      background: rgba(15, 23, 42, 0.58);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+
+    .grid-bg {
+      background-image:
+        linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+      background-size: 26px 26px;
+    }
+
+    .card-hover {
+      transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .card-hover:hover {
+      transform: translateY(-6px);
+      border-color: rgba(56, 189, 248, 0.45);
+      box-shadow: 0 18px 45px rgba(2, 132, 199, 0.12);
+    }
+
+    .scan-overlay::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        repeating-linear-gradient(
+          to bottom,
+          rgba(148, 163, 184, 0.03),
+          rgba(148, 163, 184, 0.03) 2px,
+          transparent 2px,
+          transparent 5px
+        );
+      pointer-events: none;
+    }
+
+    .scan-overlay::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 32%;
+      background: linear-gradient(
+        to bottom,
+        rgba(56, 189, 248, 0),
+        rgba(56, 189, 248, 0.16),
+        rgba(16, 185, 129, 0)
+      );
+      animation: scan 3s linear infinite;
+      pointer-events: none;
+      filter: blur(2px);
+    }
+
+    .toggle-dot {
+      transition: transform 0.25s ease;
+    }
+
+    .log-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .log-scroll::-webkit-scrollbar-thumb {
+      background: rgba(71, 85, 105, 0.8);
+      border-radius: 999px;
+    }
+
+    @media (min-width: 1280px) {
+      .desktop-seat-panel {
+        height: 100%;
+        overflow: visible !important;
+      }
+
+      .desktop-seat-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: repeat(3, minmax(0, 1fr));
+        grid-auto-rows: 1fr;
+        gap: 10px;
+        flex: 1 1 auto;
+        min-height: 0;
+        height: 100%;
+        overflow: visible;
+        padding-top: 8px;
+      }
+
+      .desktop-seat-card {
+        min-height: 0;
+        height: 100%;
+        padding: 14px 14px 12px;
+        border-radius: 22px;
+      }
+
+      .desktop-seat-card:hover {
+        position: relative;
+        z-index: 3;
+      }
+
+      .desktop-seat-head {
+        margin-bottom: 0.55rem;
+      }
+
+      .desktop-seat-title {
+        font-size: 1.05rem;
+        line-height: 1.15;
+      }
+
+      .desktop-seat-status {
+        margin-top: 0.18rem;
+        font-size: 0.82rem;
+      }
+
+      .desktop-relay-badge {
+        padding: 0.34rem 0.78rem;
+        font-size: 0.68rem;
+      }
+
+      .desktop-seat-meta {
+        display: grid;
+        gap: 0.42rem;
+        font-size: 0.84rem;
+      }
+
+      .desktop-seat-switch {
+        width: 78px;
+        height: 28px;
+      }
+
+      .desktop-seat-charge {
+        margin-top: auto;
+        padding-top: 0.6rem;
+      }
+
+      .desktop-seat-charge .charge-bar {
+        margin-top: 0.36rem;
+        height: 0.38rem;
+      }
+
+      .desktop-seat-note {
+        display: none;
+      }
+    }
+
+    @media (max-width: 767px) {
+      .mobile-header {
+        display: none !important;
+      }
+
+      .mobile-auth-panel {
+        padding: 14px;
+      }
+
+      .mobile-auth-shell {
+        padding: 12px;
+      }
+
+      .mobile-auth-stage {
+        height: 332px;
+        padding: 56px 16px 112px;
+        overflow: hidden;
+      }
+
+      .mobile-auth-center {
+        gap: 0.8rem;
+        transform: translateY(-14px);
+      }
+
+      .mobile-auth-icon {
+        padding: 1rem;
+        box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.12), 0 0 34px rgba(34, 211, 238, 0.12);
+      }
+
+      .mobile-auth-icon svg {
+        width: 3.5rem;
+        height: 3.5rem;
+      }
+
+      .mobile-auth-placeholder-title {
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        color: rgba(148, 163, 184, 0.78);
+      }
+
+      .mobile-auth-placeholder-subtitle {
+        margin-top: 0.3rem;
+        font-size: 0.62rem;
+        color: rgba(100, 116, 139, 0.95);
+      }
+
+      .mobile-auth-badge {
+        left: 12px;
+        top: 12px;
+        padding: 0.38rem 0.82rem;
+        font-size: 0.74rem;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+      }
+
+      .mobile-auth-status {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        padding: 0.82rem 0.95rem;
+        border-radius: 18px;
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+      }
+
+      .mobile-auth-status .text-sm {
+        display: block;
+        font-size: 0.74rem;
+      }
+
+      .mobile-auth-status-value {
+        margin-top: 0.35rem;
+        font-size: 0.96rem;
+        line-height: 1.32;
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+      }
+
+      .mobile-auth-grid {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .mobile-auth-card {
+        border-radius: 18px;
+        padding: 12px;
+      }
+
+      .mobile-auth-rfid,
+      .mobile-auth-sim {
+        min-height: 94px;
+      }
+
+      .mobile-auth-rfid .font-mono {
+        font-size: 0.92rem;
+        letter-spacing: 0.12em;
+      }
+
+      .mobile-auth-sim .h-3 {
+        height: 0.5rem;
+      }
+
+      .mobile-auth-result {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.9rem;
+      }
+
+      .mobile-auth-result-copy {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .mobile-auth-result-copy .text-lg {
+        font-size: 0.94rem;
+        line-height: 1.35;
+      }
+
+      .mobile-auth-result-badge {
+        flex-shrink: 0;
+        min-width: 112px;
+        border-radius: 999px;
+        padding: 0.75rem 0.9rem;
+        text-align: center;
+        font-size: 0.84rem;
+        line-height: 1.2;
+      }
+
+      .mobile-page {
+        min-height: calc(100vh - 108px);
+      }
+
+      .mobile-tabbar {
+        position: fixed;
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        z-index: 50;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        padding: 10px;
+        border-radius: 24px;
+        border: 1px solid rgba(51, 65, 85, 0.9);
+        background: rgba(15, 23, 42, 0.92);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        box-shadow: 0 18px 42px rgba(2, 6, 23, 0.42);
+      }
+
+      .mobile-tab {
+        min-height: 56px;
+        border-radius: 18px;
+        border: 1px solid rgba(51, 65, 85, 0.86);
+        background: rgba(15, 23, 42, 0.68);
+        color: rgb(148 163 184);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        transition: all 0.25s ease;
+      }
+
+      .mobile-tab.active {
+        color: rgb(240 253 250);
+        border-color: rgba(45, 212, 191, 0.45);
+        background: linear-gradient(135deg, rgba(13, 148, 136, 0.24), rgba(8, 47, 73, 0.92));
+        box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.08);
+      }
+
+      .mobile-tab-label {
+        font-size: 0.9rem;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      .mobile-tab-hint {
+        font-size: 0.7rem;
+        letter-spacing: 0.03em;
+        opacity: 0.82;
+      }
+    }
+
+    @media (max-width: 767px) {
+      body,
+      #app {
+        min-height: 100vh;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .mobile-auth-panel {
+        height: calc(100vh - 104px);
+        display: flex;
+        flex-direction: column;
+        padding: 16px 14px 14px;
+      }
+
+      .mobile-auth-header {
+        flex: 0 0 auto;
+        margin-bottom: 12px;
+        min-height: 56px;
+        align-items: center;
+      }
+
+      .mobile-auth-title,
+      .mobile-auth-header h2 {
+        font-size: 1.05rem;
+        line-height: 1.2;
+        font-weight: 700;
+      }
+
+      .mobile-auth-subtitle,
+      .mobile-auth-header p {
+        margin-top: 0.25rem;
+        font-size: 0.78rem;
+        color: rgba(148, 163, 184, 0.88);
+      }
+
+      .mobile-auth-live {
+        display: inline-flex;
+        align-items: center;
+        min-width: 88px;
+        justify-content: center;
+        align-self: center;
+        padding: 0.45rem 0.85rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        letter-spacing: 0.16em;
+        line-height: 1;
+        text-align: center;
+      }
+
+      .mobile-auth-shell {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        padding: 12px 10px 10px;
+        background: rgba(2, 6, 23, 0.42);
+      }
+
+      .mobile-auth-stage {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: auto;
+        min-height: 372px;
+        padding: 60px 18px 128px;
+        border-radius: 22px;
+      }
+
+      .mobile-auth-center {
+        gap: 0.95rem;
+        transform: none;
+      }
+
+      .mobile-auth-icon {
+        padding: 0.95rem;
+        border-color: rgba(34, 211, 238, 0.22);
+        background: rgba(34, 211, 238, 0.08);
+        box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.08), 0 18px 40px rgba(8, 145, 178, 0.10);
+      }
+
+      .mobile-auth-icon svg {
+        width: 3.35rem;
+        height: 3.35rem;
+      }
+
+      .mobile-auth-placeholder-title {
+        font-size: 0.64rem;
+        letter-spacing: 0.14em;
+        color: rgba(148, 163, 184, 0.56);
+      }
+
+      .mobile-auth-placeholder-subtitle {
+        margin-top: 0.28rem;
+        font-size: 0.58rem;
+        color: rgba(100, 116, 139, 0.86);
+      }
+
+      .mobile-auth-badge {
+        left: 14px;
+        top: 14px;
+        padding: 0.34rem 0.76rem;
+        font-size: 0.72rem;
+        border-color: rgba(16, 185, 129, 0.18);
+        background: rgba(15, 118, 110, 0.16);
+      }
+
+      .mobile-auth-status {
+        left: 14px;
+        right: 14px;
+        bottom: 14px;
+        padding: 0.8rem 0.9rem;
+        border-radius: 18px;
+        border-color: rgba(56, 189, 248, 0.08);
+        background: rgba(15, 23, 42, 0.74);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+      }
+
+      .mobile-auth-status .text-sm {
+        font-size: 0.72rem;
+        color: rgba(148, 163, 184, 0.82);
+      }
+
+      .mobile-auth-status-value {
+        margin-top: 0.34rem;
+        font-size: 1rem;
+        line-height: 1.34;
+      }
+
+      .mobile-auth-grid {
+        flex: 0 0 auto;
+        margin-top: 10px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .mobile-auth-card {
+        padding: 12px;
+        border-radius: 18px;
+        background: rgba(15, 23, 42, 0.72);
+      }
+
+      .mobile-auth-rfid,
+      .mobile-auth-sim {
+        min-height: 92px;
+      }
+
+      .mobile-auth-rfid .font-mono {
+        font-size: 0.94rem;
+        letter-spacing: 0.12em;
+      }
+
+      .mobile-auth-sim .h-3 {
+        height: 0.5rem;
+      }
+
+      .mobile-auth-result {
+        grid-column: 1 / -1;
+        align-items: center;
+        gap: 0.85rem;
+        min-height: 92px;
+      }
+
+      .mobile-auth-result-copy {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .mobile-auth-result-copy .text-lg {
+        font-size: 1rem;
+        line-height: 1.32;
+      }
+
+      .mobile-auth-result-badge {
+        min-width: 116px;
+        padding: 0.72rem 0.9rem;
+        border-radius: 999px;
+        text-align: center;
+        font-size: 0.82rem;
+        line-height: 1.18;
+      }
+
+      .mobile-seats-panel {
+        height: calc(100vh - 148px);
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        padding: 18px 10px 2px !important;
+        overflow: visible;
+      }
+
+      .mobile-seats-header {
+        flex: 0 0 auto;
+        margin-bottom: 14px !important;
+        min-height: 42px;
+      }
+
+      .mobile-seats-header h2 {
+        font-size: 0.94rem;
+        line-height: 1.2;
+      }
+
+      .mobile-seats-header p,
+      .mobile-seats-header > div:last-child,
+      .mobile-seats-summary {
+        font-size: 0.7rem;
+        color: rgba(148, 163, 184, 0.88);
+      }
+
+      .mobile-seats-header > div:last-child,
+      .mobile-seats-summary {
+        text-align: right;
+        line-height: 1.35;
+      }
+
+      .mobile-seat-grid {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        grid-template-rows: repeat(3, auto) !important;
+        grid-auto-flow: row;
+        grid-auto-rows: auto;
+        gap: 4px;
+        justify-content: center;
+        align-content: start;
+        height: auto;
+        overflow: visible;
+        padding-bottom: 0;
+        padding-top: 2px !important;
+        width: 100%;
+        max-width: 540px;
+        margin: 18px auto 0 !important;
+      }
+
+      .mobile-seat-grid > * {
+        min-width: 0;
+      }
+
+      .mobile-seat-grid::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      .mobile-seat-grid::-webkit-scrollbar-thumb {
+        background: rgba(71, 85, 105, 0.72);
+        border-radius: 999px;
+      }
+
+      .mobile-seat-card {
+        min-height: 0;
+        height: 200px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 7px 6px 5px;
+        border-radius: 18px;
+        overflow: hidden;
+        background: rgba(15, 23, 42, 0.72);
+        box-shadow: 0 10px 28px rgba(2, 6, 23, 0.18);
+        width: 100%;
+        margin-top: 6px;
+      }
+
+      .mobile-seat-card:hover {
+        position: relative;
+        z-index: 3;
+      }
+
+      .mobile-seat-head {
+        display: block !important;
+        margin-bottom: 0.14rem;
+        align-items: flex-start;
+        width: 100%;
+      }
+
+      .mobile-seat-title {
+        font-size: 0.8rem;
+        line-height: 1.08;
+      }
+
+      .mobile-seat-status {
+        margin-top: 0.08rem;
+        font-size: 0.58rem;
+        line-height: 1.15;
+      }
+
+      .mobile-relay-badge {
+        display: none !important;
+      }
+
+      .mobile-seat-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 0.12rem;
+        font-size: 0.58rem;
+        line-height: 1.18;
+        width: 100%;
+        max-width: calc(100% - 4px);
+        margin: 0 auto;
+      }
+
+      .mobile-seat-meta > div {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.45rem;
+        min-width: 0;
+      }
+
+      .mobile-seat-meta > div > span:first-child {
+        color: rgba(148, 163, 184, 0.82);
+      }
+
+      .mobile-seat-meta > div > span:last-child {
+        min-width: 0;
+        max-width: 62%;
+        text-align: right;
+        font-weight: 600;
+        color: rgba(226, 232, 240, 0.92);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .mobile-seat-meta > div:nth-child(2) > span:last-child {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        color: rgb(103 232 249);
+      }
+
+      .mobile-seat-meta > div:nth-child(3) {
+        margin-top: 0.24rem;
+      }
+
+      .mobile-seat-power-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.35rem;
+        margin-top: 0.12rem;
+        width: 100%;
+        max-width: calc(100% - 4px);
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .mobile-seat-switch {
+        width: 66px !important;
+        min-width: 66px;
+        max-width: 66px;
+        height: 22px;
+        border-radius: 999px;
+        padding: 0 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.52rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+
+      .mobile-seat-switch .toggle-dot {
+        display: none !important;
+      }
+
+      .mobile-seat-switch .relative {
+        width: 100%;
+        justify-content: center;
+        padding: 0;
+      }
+
+      .mobile-seat-switch .relative > span:first-child,
+      .mobile-seat-switch .relative > span:last-child {
+        display: none !important;
+      }
+
+      .mobile-seat-switch .relative > span:nth-child(2) {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        font-size: 0.54rem;
+        letter-spacing: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .mobile-seat-heat {
+        margin-top: 0.12rem;
+        padding-top: 0.04rem;
+        width: 100%;
+        max-width: calc(100% - 4px);
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .mobile-seat-card > .mt-1\.5 {
+        margin-top: 0.14rem;
+        height: 0.24rem;
+        width: 100%;
+      }
+
+      .mobile-seat-heat,
+      .mobile-seat-heat .text-\[11px\] {
+        font-size: 0.55rem;
+      }
+
+      .mobile-seat-note {
+        display: none;
+      }
+
+      .mobile-ops-panel {
+        height: calc(100vh - 104px);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px 14px 14px;
+      }
+
+      .mobile-ops-header {
+        flex: 0 0 auto;
+        min-height: 44px;
+      }
+
+      .mobile-ops-header h2 {
+        font-size: 1.02rem;
+        line-height: 1.2;
+      }
+
+      .mobile-ops-header p {
+        margin-top: 0.28rem;
+        font-size: 0.78rem;
+        color: rgba(148, 163, 184, 0.88);
+      }
+
+      .mobile-env-section {
+        flex: 0 0 auto;
+      }
+
+      .mobile-env-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .mobile-sensor-card {
+        min-height: 188px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px;
+        border-radius: 18px;
+        background: rgba(15, 23, 42, 0.72);
+        box-shadow: 0 10px 28px rgba(2, 6, 23, 0.16);
+      }
+
+      .mobile-sensor-head {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+
+      .mobile-sensor-head .text-sm {
+        font-size: 0.82rem;
+      }
+
+      .mobile-sensor-gauge {
+        width: 92px;
+        height: 92px;
+        margin: 0 auto;
+      }
+
+      .mobile-sensor-gauge .text-2xl {
+        font-size: 1.45rem;
+        line-height: 1;
+      }
+
+      .mobile-sensor-gauge .text-sm {
+        margin-top: 0.3rem;
+        font-size: 0.78rem;
+        color: rgba(148, 163, 184, 0.82);
+      }
+
+      .mobile-sensor-value {
+        font-size: 1.45rem;
+        line-height: 1;
+      }
+
+      .mobile-sensor-unit {
+        margin-top: 0.3rem;
+        font-size: 0.78rem;
+        color: rgba(148, 163, 184, 0.82);
+      }
+
+      .mobile-sensor-foot {
+        margin-top: 8px;
+        font-size: 0.66rem;
+        letter-spacing: 0.12em;
+        color: rgba(100, 116, 139, 0.76);
+      }
+
+      .mobile-sensor-card > .mt-2 {
+        margin-top: 8px;
+        font-size: 0.66rem;
+        letter-spacing: 0.12em;
+        color: rgba(100, 116, 139, 0.76);
+      }
+
+      .mobile-logs-section {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .mobile-log-panel {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 12px;
+        border-radius: 22px;
+      }
+
+      .mobile-log-header {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+
+      .mobile-log-header h2 {
+        font-size: 1rem;
+        line-height: 1.2;
+      }
+
+      .mobile-log-header p {
+        margin-top: 0.24rem;
+        font-size: 0.76rem;
+        color: rgba(148, 163, 184, 0.88);
+      }
+
+      .mobile-log-count {
+        flex-shrink: 0;
+        padding: 0.38rem 0.8rem;
+        border-radius: 999px;
+        font-size: 0.72rem;
+      }
+
+      .mobile-log-list {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: auto !important;
+        overflow-y: auto;
+        padding: 10px 12px 16px;
+        border-radius: 18px;
+        font-size: 0.72rem;
+        line-height: 1.55;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen overflow-x-hidden text-slate-100">
+  <div id="app" class="min-h-screen grid-bg">
+    <div class="mx-auto max-w-[1500px] px-3 py-4 md:px-4 md:py-5 xl:px-4 xl:py-6">
+      <header class="mobile-header glass card-hover mb-4 flex flex-col gap-3 rounded-3xl border border-slate-700/70 px-4 py-3 shadow-glass md:flex-row md:items-center md:justify-between">
+        <div class="flex items-center gap-4">
+          <div class="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/30 bg-cyan-400/10 text-cyan-300 shadow-lg shadow-cyan-500/10">
+            <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+              <path d="M12 2l7 4v6c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-4z"></path>
+              <path d="M9.5 11.5l1.8 1.8 3.7-4.2"></path>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-base font-semibold tracking-wide text-slate-100 md:text-xl xl:text-[1.35rem]">SmartLab IoT Dashboard - 智能终端管控平台</h1>
+            <p class="text-sm text-slate-400">Dual Authentication · Relay Control · Edge Sensing</p>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-2 text-sm md:items-end">
+          <div class="font-mono text-base tracking-wider text-cyan-300 md:text-lg">{{ currentTime }}</div>
+          <div class="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-300">
+            <span class="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)] animate-pulse"></span>
+            <span>Edge Server Online</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="grid grid-cols-1 gap-4 xl:h-[calc(100vh-190px)] xl:grid-cols-[minmax(320px,1fr)_minmax(360px,1.08fr)_minmax(320px,0.92fr)] xl:items-stretch xl:auto-rows-fr xl:gap-3">
+        <section :class="mobileSectionClass('auth')" class="mobile-page mobile-auth-panel glass card-hover min-w-0 rounded-3xl border border-slate-700/70 p-4 shadow-glass xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden">
+          <div class="mobile-auth-header mb-3 flex items-center justify-between">
+            <div>
+              <h2 class="text-xl font-semibold text-white">人脸与 RFID 双重认证</h2>
+              <p class="mt-1 text-sm text-slate-400">Identity Authentication</p>
+            </div>
+            <div class="mobile-auth-live rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-cyan-300">
+              LIVE
+            </div>
+          </div>
+
+          <div class="mobile-auth-shell relative overflow-hidden rounded-3xl border border-slate-700 bg-slate-950/80 p-3 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col">
+            <div class="mobile-auth-stage scan-overlay relative flex h-[240px] items-center justify-center rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 xl:min-h-[220px] xl:flex-1">
+              <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.12),transparent_40%)]"></div>
+              <div class="mobile-auth-center relative z-10 flex flex-col items-center gap-4 text-slate-500">
+                <div class="mobile-auth-icon rounded-full border border-cyan-400/20 bg-cyan-400/10 p-6 text-cyan-300 shadow-[0_0_40px_rgba(34,211,238,0.15)]">
+                  <svg class="h-16 w-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M4 8a2 2 0 0 1 2-2h2l1.2-2h5.6L16 6h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z"></path>
+                    <circle cx="12" cy="12" r="3.5"></circle>
+                    <path d="M8.5 12h.01M15.5 12h.01"></path>
+                  </svg>
+                </div>
+                <div class="text-center">
+                  <div class="mobile-auth-placeholder-title text-sm tracking-[0.2em] text-slate-500">摄像头画面预览</div>
+                  <div class="mobile-auth-placeholder-subtitle mt-2 text-xs text-slate-600">边缘摄像头 / 实时识别</div>
+                </div>
+              </div>
+
+              <div class="mobile-auth-badge absolute left-4 top-4 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-300">
+                {{ auth.cameraStatus }}
+              </div>
+
+              <div class="mobile-auth-status absolute bottom-4 left-4 right-4 rounded-2xl border border-cyan-400/10 bg-slate-900/70 px-4 py-3">
+                <div class="text-sm text-slate-400">当前状态</div>
+                <div :class="statusToneClass(auth.flowState)" class="mobile-auth-status-value mt-1 text-lg font-medium">{{ auth.statusText }}</div>
+              </div>
+            </div>
+
+            <div class="mobile-auth-grid mt-4 grid gap-3 xl:mt-3">
+              <div class="mobile-auth-card mobile-auth-rfid rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+                <div class="mb-2 flex items-center justify-between text-sm text-slate-400">
+                  <span>RFID 卡号</span>
+                  <span class="text-slate-500">UID</span>
+                </div>
+                <div class="font-mono text-xl tracking-[0.25em]" :class="auth.rfidUid ? 'text-cyan-300' : 'text-slate-500'">
+                  {{ auth.rfidUid || '-- -- -- --' }}
+                </div>
+              </div>
+
+              <div class="mobile-auth-card mobile-auth-sim rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+                <div class="mb-2 flex items-center justify-between text-sm text-slate-400">
+                  <span>人脸比对相似度</span>
+                  <span :class="auth.similarity >= 90 ? 'text-emerald-400' : auth.similarity >= 60 ? 'text-blue-400' : 'text-rose-400'">
+                    {{ auth.similarity.toFixed(1) }}%
+                  </span>
+                </div>
+                <div class="h-3 overflow-hidden rounded-full bg-slate-800">
+                  <div
+                    class="h-full rounded-full transition-all duration-500"
+                    :class="auth.similarity >= 90 ? 'bg-gradient-to-r from-emerald-500 to-cyan-400' : auth.similarity >= 60 ? 'bg-gradient-to-r from-blue-500 to-cyan-400' : 'bg-gradient-to-r from-rose-500 to-orange-400'"
+                    :style="{ width: auth.similarity + '%' }"
+                  ></div>
+                </div>
+              </div>
+
+              <div class="mobile-auth-card mobile-auth-result flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+                <div class="mobile-auth-result-copy">
+                  <div class="text-sm text-slate-400">最终判定</div>
+                  <div class="mt-1 text-lg font-semibold">{{ auth.resultLabel }}</div>
+                </div>
+                <span
+                  class="mobile-auth-result-badge rounded-full px-4 py-2 text-sm font-medium"
+                  :class="auth.result === 'granted'
+                    ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                    : auth.result === 'denied'
+                    ? 'border border-rose-500/30 bg-rose-500/10 text-rose-300'
+                    : 'border border-blue-500/30 bg-blue-500/10 text-blue-300'"
+                >
+                  {{ auth.result === 'granted' ? 'Access Granted' : auth.result === 'denied' ? 'Access Denied' : 'Standby' }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section :class="mobileSectionClass('seats')" class="mobile-page mobile-seats-panel desktop-seat-panel glass card-hover min-w-0 rounded-3xl border border-slate-700/70 p-4 shadow-glass xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden">
+          <div class="mobile-seats-header mb-3 flex items-center justify-between">
+            <div>
+              <h2 class="text-xl font-semibold text-white">座位 / 设备继电器控制</h2>
+              <p class="mt-1 text-sm text-slate-400">Resource Management</p>
+            </div>
+            <div class="text-sm text-slate-400">启用座位：<span class="font-semibold text-emerald-400">{{ activeSeatCount }}</span> / {{ seats.length }}</div>
+          </div>
+
+          <div class="mobile-seat-grid desktop-seat-grid grid grid-cols-2 gap-2 xl:min-h-0 xl:flex-1 xl:content-start xl:pr-1">
+            <div
+              v-for="seat in seats"
+              :key="seat.id"
+              class="mobile-seat-card desktop-seat-card card-hover rounded-2xl border px-3 py-2"
+              :class="seat.occupied ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-slate-700 bg-slate-900/60'"
+            >
+              <div class="mobile-seat-head desktop-seat-head mb-2 flex items-start justify-between gap-2">
+                <div>
+                  <div class="mobile-seat-title desktop-seat-title text-base font-semibold text-white">{{ seatLabel(seat.id) }}</div>
+                  <div class="mobile-seat-status desktop-seat-status mt-0.5 text-xs" :class="seat.occupied ? 'text-emerald-400' : 'text-slate-400'">{{ seatStatusText(seat) }}</div>
+                  <div v-if="false" class="mt-0.5 text-xs" :class="seat.occupied ? 'text-emerald-400' : 'text-slate-400'">
+                    {{ seat.occupied ? '使用中' : '空闲' }}
+                  </div>
+                </div>
+                <div
+                  class="mobile-relay-badge desktop-relay-badge rounded-full px-2.5 py-1 text-[11px] font-medium"
+                  :class="seat.power ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'"
+                >
+                  {{ seat.power ? '继电器开启' : '继电器关闭' }}
+                </div>
+              </div>
+
+              <div class="mobile-seat-meta desktop-seat-meta space-y-1.5 text-[13px]">
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-400">使用者</span>
+                  <span class="font-medium text-slate-200">{{ seat.user || '无人' }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-400">已使用时长</span>
+                  <span class="font-mono text-cyan-300">{{ seat.duration }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-400">台灯 / 电源</span>
+                  <button
+                    @click="toggleSeat(seat)"
+                    class="mobile-seat-switch desktop-seat-switch relative inline-flex h-7 w-[94px] items-center rounded-full border px-1 transition"
+                    :class="seat.power ? 'border-emerald-400/40 bg-emerald-500/20' : 'border-slate-600 bg-slate-800/90'"
+                    :title="seat.power ? '点击关闭该座位电源' : '点击开启该座位电源'"
+                  >
+                    <span
+                        class="toggle-dot absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-md"
+                        :style="{ transform: seat.power ? 'translateX(61px)' : 'translateX(0px)' }"
+                    ></span>
+                    <span class="relative z-10 flex w-full items-center justify-between px-1.5 text-[10px] font-medium">
+                      <span :class="seat.power ? 'text-slate-900' : 'text-slate-400'">关</span>
+                      <span :class="seat.power ? 'text-emerald-200' : 'text-slate-300'">电源{{ seat.power ? '开' : '关' }}</span>
+                      <span :class="seat.power ? 'text-emerald-200' : 'text-slate-900'">开</span>
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="mobile-seat-heat desktop-seat-charge mt-2 flex items-center justify-between text-[11px]">
+                <span class="text-slate-400">消费金额</span>
+                <span class="font-mono" :class="seat.occupied ? 'text-cyan-300' : 'text-slate-500'">
+                  {{ seatChargeText(seat) }}
+                </span>
+              </div>
+              <div class="charge-bar mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                <div
+                  class="h-full rounded-full transition-all duration-700"
+                  :class="seat.occupied ? 'bg-gradient-to-r from-emerald-500 to-cyan-400' : 'bg-slate-700'"
+                  :style="{ width: seatChargePercent(seat) + '%' }"
+                ></div>
+              </div>
+              <div class="mobile-seat-note desktop-seat-note mt-1 text-[11px] leading-4 text-slate-500">
+                {{ seat.occupied ? '该进度条表示当前座位的占用与设备负载水平' : '当前无人使用，保持低负载待机' }}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section :class="mobileSectionClass('ops')" class="mobile-page mobile-ops-panel grid min-w-0 gap-4 xl:h-full xl:min-h-0 xl:grid-rows-[auto_minmax(0,1fr)] xl:content-start xl:gap-3">
+          <div class="mobile-env-section glass card-hover min-w-0 rounded-3xl border border-slate-700/70 p-4 shadow-glass xl:min-h-[0]">
+            <div class="mobile-ops-header mb-3">
+              <h2 class="text-xl font-semibold text-white">环境感知</h2>
+              <p class="mt-1 text-sm text-slate-400">Environment Monitoring</p>
+            </div>
+
+            <div class="mobile-env-grid grid grid-cols-2 gap-3">
+              <div class="mobile-sensor-card rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+                <div class="mobile-sensor-head mb-3 flex items-center justify-between">
+                  <span class="text-sm text-slate-400">温度</span>
+                  <svg class="h-5 w-5 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <path d="M14 14.76V5a2 2 0 1 0-4 0v9.76a4 4 0 1 0 4 0z"></path>
+                  </svg>
+                </div>
+                <div class="mobile-sensor-gauge relative mx-auto h-28 w-28 xl:h-24 xl:w-24">
+                  <svg viewBox="0 0 120 120" class="h-full w-full -rotate-90">
+                    <circle cx="60" cy="60" r="44" stroke="rgba(51,65,85,0.9)" stroke-width="10" fill="none" />
+                    <circle
+                      cx="60"
+                      cy="60"
+                      r="44"
+                      stroke="url(#tempGradient)"
+                      stroke-width="10"
+                      fill="none"
+                      stroke-linecap="round"
+                      :stroke-dasharray="276.46"
+                      :stroke-dashoffset="276.46 - (276.46 * environment.tempGauge / 100)"
+                    />
+                    <defs>
+                      <linearGradient id="tempGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#fb7185"></stop>
+                        <stop offset="100%" stop-color="#22d3ee"></stop>
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div class="absolute inset-0 flex flex-col items-center justify-center">
+                    <div class="text-2xl font-semibold text-white xl:text-xl">{{ environment.temperature.toFixed(1) }}</div>
+                    <div class="text-sm text-slate-400">℃</div>
+                  </div>
+                </div>
+                <div class="mt-2 text-center text-xs tracking-[0.2em] text-slate-500">THERMAL SENSOR</div>
+              </div>
+
+              <div class="mobile-sensor-card rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+                <div class="mobile-sensor-head mb-3 flex items-center justify-between">
+                  <span class="text-sm text-slate-400">湿度</span>
+                  <svg class="h-5 w-5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <path d="M12 3C9 7 6 10.2 6 14a6 6 0 0 0 12 0c0-3.8-3-7-6-11z"></path>
+                  </svg>
+                </div>
+                <div class="mobile-sensor-gauge relative mx-auto h-28 w-28 xl:h-24 xl:w-24">
+                  <svg viewBox="0 0 120 120" class="h-full w-full -rotate-90">
+                    <circle cx="60" cy="60" r="44" stroke="rgba(51,65,85,0.9)" stroke-width="10" fill="none" />
+                    <circle
+                      cx="60"
+                      cy="60"
+                      r="44"
+                      stroke="url(#humGradient)"
+                      stroke-width="10"
+                      fill="none"
+                      stroke-linecap="round"
+                      :stroke-dasharray="276.46"
+                      :stroke-dashoffset="276.46 - (276.46 * environment.humidityGauge / 100)"
+                    />
+                    <defs>
+                      <linearGradient id="humGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#38bdf8"></stop>
+                        <stop offset="100%" stop-color="#34d399"></stop>
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div class="absolute inset-0 flex flex-col items-center justify-center">
+                    <div class="text-2xl font-semibold text-white xl:text-xl">{{ environment.humidity.toFixed(1) }}</div>
+                    <div class="text-sm text-slate-400">%</div>
+                  </div>
+                </div>
+                <div class="mt-2 text-center text-xs tracking-[0.2em] text-slate-500">HUMIDITY SENSOR</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mobile-logs-section glass card-hover min-w-0 rounded-3xl border border-slate-700/70 p-4 shadow-glass xl:flex xl:min-h-0 xl:flex-col xl:overflow-hidden">
+            <div class="mobile-log-panel">
+            <div class="mobile-log-header mb-3 flex items-center justify-between">
+              <div>
+                <h2 class="text-xl font-semibold text-white">实时日志流</h2>
+                <p class="mt-1 text-sm text-slate-400">System Logs</p>
+              </div>
+              <div class="mobile-log-count rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1 font-mono text-xs text-slate-400">
+                {{ logs.length }} events
+              </div>
+            </div>
+
+            <div ref="logContainer" class="mobile-log-list log-scroll h-[280px] w-full max-w-full overflow-x-hidden overflow-y-auto rounded-2xl border border-slate-800 bg-black/60 p-3 font-mono text-xs leading-6 xl:h-full xl:flex-1">
+              <div
+                v-for="(log, index) in logs"
+                :key="index"
+                class="break-all border-b border-slate-800/70 py-1 last:border-b-0"
+              >
+                <span class="text-slate-500">[{{ log.time }}]</span>
+                <span class="ml-2" :class="log.typeColor">[{{ log.type }}]</span>
+                <span class="ml-2 text-slate-300">{{ log.message }}</span>
+              </div>
+            </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <nav class="mobile-tabbar md:hidden">
+        <button type="button" class="mobile-tab" :class="{ active: mobileTab === 'auth' }" @click="mobileTab = 'auth'">
+          <span class="mobile-tab-label">认证</span>
+          <span class="mobile-tab-hint">RFID</span>
+        </button>
+        <button type="button" class="mobile-tab" :class="{ active: mobileTab === 'seats' }" @click="mobileTab = 'seats'">
+          <span class="mobile-tab-label">座位</span>
+          <span class="mobile-tab-hint">Relay</span>
+        </button>
+        <button type="button" class="mobile-tab" :class="{ active: mobileTab === 'ops' }" @click="mobileTab = 'ops'">
+          <span class="mobile-tab-label">监控</span>
+          <span class="mobile-tab-hint">Logs</span>
+        </button>
+      </nav>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, nextTick } = Vue;
+    createApp({
+      data() {
+        return {
+          currentTime: "",
+          auth: {
+            cameraStatus: "摄像头就绪",
+            flowState: "idle",
+            statusText: "等待 RFID 唤醒...",
+            rfidUid: "",
+            similarity: 0,
+            result: "standby",
+            resultLabel: "系统待机中",
+          },
+          seats: [
+            { id: "Seat-01", occupied: true, user: "张晨曦", duration: "01:23:45", seconds: 5025, power: true, load: 86 },
+            { id: "Seat-02", occupied: false, user: "", duration: "00:00:00", seconds: 0, power: false, load: 12 },
+            { id: "Seat-03", occupied: true, user: "李思远", duration: "00:48:12", seconds: 2892, power: true, load: 64 },
+            { id: "Seat-04", occupied: false, user: "", duration: "00:00:00", seconds: 0, power: false, load: 10 },
+            { id: "Seat-05", occupied: true, user: "王雨桐", duration: "02:08:31", seconds: 7711, power: true, load: 91 },
+            { id: "Seat-06", occupied: false, user: "", duration: "00:00:00", seconds: 0, power: false, load: 8 },
+          ],
+          environment: {
+            temperature: 25.4,
+            humidity: 45.0,
+            tempGauge: 63,
+            humidityGauge: 45,
+          },
+          mockUsers: [
+            { name: "陈以安", uid: "4A B2 19 CF", similarity: 98.5, seatId: "Seat-02" },
+            { name: "林书昊", uid: "9C 11 D7 A4", similarity: 96.2, seatId: "Seat-04" },
+            { name: "周芷若", uid: "E1 7F 33 B8", similarity: 94.8, seatId: "Seat-06" },
+          ],
+          logs: [
+            { time: "10:02:15", type: "MQTT", typeColor: "text-cyan-400", message: "收到环境数据更新" },
+            { time: "10:05:30", type: "Serial", typeColor: "text-amber-400", message: "RFID 卡片 0x3F 刷入" },
+            { time: "10:05:32", type: "HTTP", typeColor: "text-blue-400", message: "接收到 ESP32 图像推送" },
+            { time: "10:05:33", type: "AI", typeColor: "text-emerald-400", message: "人脸匹配成功，相似度 96%" },
+            { time: "10:05:33", type: "GPIO", typeColor: "text-fuchsia-400", message: "继电器 #1 已闭合" },
+          ],
+          mobileTab: "ops",
+          isMobileView: typeof window !== "undefined" ? window.innerWidth < 768 : false,
+          timers: [],
+          flowIndex: 0,
+        };
+      },
+      computed: {
+        activeSeatCount() {
+          return this.seats.filter((seat) => seat.occupied).length;
+        },
+      },
+      mounted() {
+        this.handleViewportChange();
+        window.addEventListener("resize", this.handleViewportChange);
+        this.updateClock();
+        this.timers.push(setInterval(this.updateClock, 1000));
+        this.timers.push(setInterval(this.tickDurations, 1000));
+        this.timers.push(setInterval(this.updateEnvironment, 3200));
+        this.startAuthLoop();
+      },
+      beforeUnmount() {
+        window.removeEventListener("resize", this.handleViewportChange);
+        this.timers.forEach((timer) => clearInterval(timer));
+      },
+      methods: {
+        pad(n) {
+          return String(n).padStart(2, "0");
+        },
+        seatLabel(id) {
+          const match = String(id).match(/(\d+)/);
+          return match ? `座位${this.pad(Number(match[1]))}` : id;
+        },
+        seatStatusText(seat) {
+          return seat.occupied ? "使用中" : "空闲";
+        },
+        seatCharge(seat) {
+          if (!seat || !seat.occupied) return 0;
+          const billableHours = Math.ceil(Math.max(0, seat.seconds) / 3600);
+          return Math.min(20, billableHours * 2);
+        },
+        seatChargeText(seat) {
+          return `￥${this.seatCharge(seat)}`;
+        },
+        seatChargePercent(seat) {
+          return Math.min(100, Math.round((this.seatCharge(seat) / 20) * 100));
+        },
+        handleViewportChange() {
+          this.isMobileView = window.innerWidth < 768;
+        },
+        mobileSectionClass(tab) {
+          if (!this.isMobileView) return "block";
+          return this.mobileTab === tab ? "block" : "hidden";
+        },
+        formatDate(date) {
+          return `${date.getFullYear()}-${this.pad(date.getMonth() + 1)}-${this.pad(date.getDate())} ${this.pad(date.getHours())}:${this.pad(date.getMinutes())}:${this.pad(date.getSeconds())}`;
+        },
+        timeOnly() {
+          const d = new Date();
+          return `${this.pad(d.getHours())}:${this.pad(d.getMinutes())}:${this.pad(d.getSeconds())}`;
+        },
+        updateClock() {
+          this.currentTime = this.formatDate(new Date());
+        },
+        formatDuration(seconds) {
+          const h = this.pad(Math.floor(seconds / 3600));
+          const m = this.pad(Math.floor((seconds % 3600) / 60));
+          const s = this.pad(seconds % 60);
+          return `${h}:${m}:${s}`;
+        },
+        tickDurations() {
+          this.seats.forEach((seat) => {
+            if (seat.occupied) {
+              seat.seconds += 1;
+              seat.duration = this.formatDuration(seat.seconds);
+            }
+          });
+        },
+        updateEnvironment() {
+          const t = 24.8 + Math.random() * 1.4;
+          const h = 43 + Math.random() * 8;
+          this.environment.temperature = Number(t.toFixed(1));
+          this.environment.humidity = Number(h.toFixed(1));
+          this.environment.tempGauge = Math.min(100, Math.max(0, Math.round((this.environment.temperature / 40) * 100)));
+          this.environment.humidityGauge = Math.min(100, Math.max(0, Math.round(this.environment.humidity)));
+          this.pushLog("MQTT", "text-cyan-400", `环境数据更新: 温度 ${this.environment.temperature}℃ / 湿度 ${this.environment.humidity}%`);
+        },
+        toggleSeat(seat) {
+          seat.power = !seat.power;
+          if (!seat.power && seat.occupied) {
+            seat.occupied = false;
+            seat.user = "";
+            seat.seconds = 0;
+            seat.duration = "00:00:00";
+            seat.load = 10;
+            this.pushLog("GPIO", "text-fuchsia-400", `${seat.id} 继电器手动断开`);
+          } else if (seat.power && !seat.occupied) {
+            seat.occupied = true;
+            seat.user = "临时访客";
+            seat.seconds = Math.floor(Math.random() * 180);
+            seat.duration = this.formatDuration(seat.seconds);
+            seat.load = 55;
+            this.pushLog("GPIO", "text-fuchsia-400", `${seat.id} 继电器手动闭合`);
+          }
+        },
+        statusToneClass(state) {
+          if (state === "success") return "text-emerald-400";
+          if (state === "processing") return "text-blue-400";
+          if (state === "error") return "text-rose-400";
+          return "text-slate-300";
+        },
+        pushLog(type, typeColor, message) {
+          this.logs.push({
+            time: this.timeOnly(),
+            type,
+            typeColor,
+            message,
+          });
+          if (this.logs.length > 18) this.logs.shift();
+          nextTick(() => {
+            const el = this.$refs.logContainer;
+            if (el) el.scrollTop = el.scrollHeight;
+          });
+        },
+        startAuthLoop() {
+          const cycle = () => {
+            const selected = this.mockUsers[this.flowIndex % this.mockUsers.length];
+            this.flowIndex += 1;
+
+            this.auth.flowState = "idle";
+            this.auth.statusText = "等待 RFID 唤醒...";
+            this.auth.rfidUid = "";
+            this.auth.similarity = 0;
+            this.auth.result = "standby";
+            this.auth.resultLabel = "系统待机中";
+            this.auth.cameraStatus = "摄像头就绪";
+
+            setTimeout(() => {
+              this.auth.flowState = "processing";
+              this.auth.statusText = "RFID 已读取，正在抓拍人脸...";
+              this.auth.rfidUid = selected.uid;
+              this.auth.cameraStatus = "RFID 已触发";
+              this.pushLog("Serial", "text-amber-400", `RFID 卡片 ${selected.uid} 刷入`);
+            }, 1800);
+
+            setTimeout(() => {
+              this.auth.flowState = "processing";
+              this.auth.statusText = "边缘节点上传图像中...";
+              this.auth.cameraStatus = "正在上传画面";
+              this.auth.similarity = 38.4;
+              this.pushLog("HTTP", "text-blue-400", "接收到 ESP32 图像推送");
+            }, 3600);
+
+            setTimeout(() => {
+              this.auth.flowState = "processing";
+              this.auth.statusText = "AI 正在进行身份比对...";
+              this.auth.cameraStatus = "正在识别";
+              this.auth.similarity = 77.3;
+              this.pushLog("AI", "text-emerald-400", "模型开始执行人脸特征匹配");
+            }, 5200);
+
+            setTimeout(() => {
+              this.auth.flowState = "success";
+              this.auth.statusText = "验证通过，正在联动继电器与座位设备...";
+              this.auth.cameraStatus = "识别完成";
+              this.auth.similarity = selected.similarity;
+              this.auth.result = "granted";
+              this.auth.resultLabel = `${selected.name} 身份确认成功`;
+              this.pushLog("AI", "text-emerald-400", `人脸匹配成功，相似度 ${selected.similarity}%`);
+
+              const seat = this.seats.find((item) => item.id === selected.seatId);
+              if (seat) {
+                seat.occupied = true;
+                seat.user = selected.name;
+                seat.power = true;
+                seat.seconds = 0;
+                seat.duration = "00:00:00";
+                seat.load = 88;
+                this.pushLog("GPIO", "text-fuchsia-400", `${seat.id} 继电器已闭合，台灯已开启`);
+              }
+            }, 7000);
+
+            setTimeout(() => {
+              this.auth.statusText = "会话已建立，等待下一次认证请求...";
+              this.auth.cameraStatus = "监控中";
+              this.pushLog("SYS", "text-slate-400", "认证链路执行完成，系统恢复监听状态");
+            }, 9800);
+
+            this.timers.push(setTimeout(cycle, 13500));
+          };
+
+          cycle();
+        },
+      },
+    }).mount("#app");
+  </script>
+</body>
+</html>
