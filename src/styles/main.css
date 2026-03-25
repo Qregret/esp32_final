@@ -236,7 +236,7 @@ a {
 }
 
 .desktop-only {
-  display: block;
+  display: flex;
 }
 
 .mobile-only {
