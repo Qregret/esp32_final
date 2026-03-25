@@ -18,6 +18,8 @@ const LOG_COLORS = {
   SYS: "log-slate",
 };
 
+const MAX_RECENT_LOGS = 20;
+
 const CAMERA_STATUS_TEXT = {
   ready: "摄像头就绪",
   camera_ready: "摄像头就绪",
@@ -60,9 +62,24 @@ function parseDateTime(value) {
   if (!value) return null;
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
 
-  const normalized = typeof value === "string" ? value.replace(" ", "T") : value;
-  const parsed = new Date(normalized);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  // 兼容数组格式 [2026, 3, 25, 13, 50, 8]
+  if (Array.isArray(value)) {
+    const [y, m, d, h = 0, min = 0, s = 0] = value;
+    return new Date(y, m - 1, d, h, min, s);
+  }
+
+  if (typeof value === "number") {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.includes(" ") ? value.replace(" ", "T") : value;
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  return null;
 }
 
 function translateCameraStatus(value) {
@@ -193,17 +210,30 @@ function normalizeSeats(list, clockDate, localSeatStartTimes) {
 }
 
 function normalizeLogs(list) {
-  return (Array.isArray(list) ? list : []).map((item) => {
-    const type = String(item.logType || item.type || "SYS").toUpperCase();
-    const createdAt = parseDateTime(item.createdAt);
+  return (Array.isArray(list) ? list : [])
+    .map((item, index) => {
+      const type = String(item.logType || item.type || "SYS").toUpperCase();
+      const createdAt = parseDateTime(item.createdAt);
 
-    return {
-      time: createdAt ? formatTime(createdAt) : item.time || "--:--:--",
-      type,
-      message: item.message || "",
-      colorClass: LOG_COLORS[type] ?? "log-slate",
-    };
-  });
+      return {
+        time: createdAt ? formatTime(createdAt) : item.time || "--:--:--",
+        type,
+        message: item.message || "",
+        colorClass: LOG_COLORS[type] ?? "log-slate",
+        _sortTime: createdAt ? createdAt.getTime() : null,
+        _sortIndex: index,
+      };
+    })
+    .sort((left, right) => {
+      if (left._sortTime !== null && right._sortTime !== null) {
+        return left._sortTime - right._sortTime || left._sortIndex - right._sortIndex;
+      }
+
+      if (left._sortTime !== null) return -1;
+      if (right._sortTime !== null) return 1;
+      return left._sortIndex - right._sortIndex;
+    })
+    .map(({ _sortTime, _sortIndex, ...entry }) => entry);
 }
 
 function formatSeatActionError(error) {
@@ -219,6 +249,36 @@ function formatSeatActionError(error) {
   }
 
   return `${normalized.slice(0, 117)}...`;
+}
+
+function normalizeLocalLogMessage(type, message) {
+  const raw = String(message ?? "").trim();
+
+  if (String(type).toUpperCase() !== "GPIO") {
+    return raw;
+  }
+
+  const seatMatch = raw.match(/(\d+)/);
+  const seatCode = seatMatch ? `Seat-${pad(Number(seatMatch[1]))}` : "Seat";
+  const lowered = raw.toLowerCase();
+
+  if (lowered.includes("power on")) {
+    return `${seatCode} power on`;
+  }
+
+  if (lowered.includes("power off")) {
+    return `${seatCode} power off`;
+  }
+
+  if (/开启|打开|上电|开机/.test(raw)) {
+    return `${seatCode} power on`;
+  }
+
+  if (/关闭|断电|关机/.test(raw)) {
+    return `${seatCode} power off`;
+  }
+
+  return raw;
 }
 
 export function useDashboard() {
@@ -249,6 +309,12 @@ export function useDashboard() {
   const seatLabel = (id) => {
     const match = String(id).match(/(\d+)/);
     return match ? `座位${pad(Number(match[1]))}` : String(id);
+  };
+
+  const seatLogLabel = (seat) => {
+    const source = seat?.id ?? seat?.seatId ?? "";
+    const match = String(source).match(/(\d+)/);
+    return match ? `Seat-${pad(Number(match[1]))}` : String(source || "Seat");
   };
 
   const seatStatusText = (seat) => {
@@ -329,6 +395,31 @@ export function useDashboard() {
       logs.value = normalized;
       logEventCount.value = Math.max(logEventCount.value, normalized.length);
     }
+  }
+
+  // 👑 核心修复：这里原本依赖可能不同步的 serverClock，现在强制使用浏览器真实时间
+  function appendLocalLog(type, message, createdAt = new Date()) {
+    const [entry] = normalizeLogs([
+      {
+        type,
+        message: normalizeLocalLogMessage(type, message),
+        createdAt,
+      },
+    ]);
+
+    if (!entry) {
+      return;
+    }
+
+    const alreadyExists = logs.value.some(
+      (log) => log.type === entry.type && log.message === entry.message && log.time === entry.time,
+    );
+
+    if (!alreadyExists) {
+      logs.value = [...logs.value, entry].slice(-MAX_RECENT_LOGS);
+    }
+
+    logEventCount.value += 1;
   }
 
   function clearSeatActionNoticeTimer() {
@@ -474,12 +565,18 @@ export function useDashboard() {
       }
 
       applySeatPowerResponse(seat.seatId, updatedSeat);
+      appendLocalLog(
+        "GPIO",
+        `${buildSeatActionLabel(seat)} ${seat.power ? "电源已关闭" : "电源已开启"}`,
+      );
       showSeatActionNotice(
         `${buildSeatActionLabel(seat)}${seat.power ? "已关闭" : "已开启"}`,
         "success",
         1200,
       );
-      await refreshDashboardData();
+      await refreshDashboardData().catch((error) => {
+        console.warn("Failed to refresh dashboard data after seat toggle", error);
+      });
     } catch (error) {
       console.error("Failed to toggle seat power", error);
       seatActionError.value = formatSeatActionError(error);
