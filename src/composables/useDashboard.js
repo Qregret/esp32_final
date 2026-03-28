@@ -7,6 +7,7 @@ import {
   powerOffSeat,
   powerOnSeat,
   subscribeToDashboardEvents,
+  subscribeToDashboardSocket,
 } from "../services/dashboardApi";
 
 const LOG_COLORS = {
@@ -281,6 +282,29 @@ function normalizeLocalLogMessage(type, message) {
   return raw;
 }
 
+function resolveRealtimeEventName(message) {
+  if (!message || typeof message !== "object") {
+    return "";
+  }
+
+  return String(
+    message.eventName ??
+      message.event ??
+      message.type ??
+      message.topic ??
+      message.name ??
+      "",
+  ).trim();
+}
+
+function resolveRealtimePayload(message) {
+  if (!message || typeof message !== "object") {
+    return null;
+  }
+
+  return message.payload ?? message.data ?? message.body ?? message;
+}
+
 export function useDashboard() {
   const serverClock = ref(new Date());
   const currentTime = ref(formatDateTime(serverClock.value));
@@ -300,9 +324,13 @@ export function useDashboard() {
   const refreshTimers = [];
   const pendingSeatIds = reactive(new Set());
   const localSeatStartTimes = new Map();
+  let socketSource = null;
   let streamSource = null;
   let scheduledRefresh = null;
   let seatActionNoticeTimer = null;
+  let socketReconnectTimer = null;
+  let socketFallbackEnabled = false;
+  let socketHasOpened = false;
 
   const activeSeatCount = computed(() => seats.value.filter((seat) => seat.occupied).length);
 
@@ -483,6 +511,121 @@ export function useDashboard() {
     });
   }
 
+  function applySingleSeatData(seatLike) {
+    const normalized = normalizeSeats([seatLike], serverClock.value, localSeatStartTimes)[0];
+
+    if (!normalized) {
+      return;
+    }
+
+    const existingIndex = seats.value.findIndex((seat) => seat.seatId === normalized.seatId);
+
+    if (existingIndex === -1) {
+      seats.value = [...seats.value, normalized].sort((left, right) => {
+        const leftId = Number(left.seatId ?? 0);
+        const rightId = Number(right.seatId ?? 0);
+        return leftId - rightId;
+      });
+      return;
+    }
+
+    seats.value = seats.value.map((seat, index) => (index === existingIndex ? normalized : seat));
+  }
+
+  function applyRealtimeLogEntry(entry) {
+    const normalized = normalizeLogs([entry]);
+    if (!normalized.length) {
+      return;
+    }
+
+    const [nextLog] = normalized;
+    const alreadyExists = logs.value.some(
+      (log) => log.type === nextLog.type && log.message === nextLog.message && log.time === nextLog.time,
+    );
+
+    if (!alreadyExists) {
+      logs.value = [...logs.value, nextLog].slice(-MAX_RECENT_LOGS);
+      logEventCount.value += 1;
+    }
+  }
+
+  function handleRealtimeUpdate(eventName, payload) {
+    const name = String(eventName || "").trim();
+    const data = payload ?? null;
+
+    if (data?.serverTime) {
+      const clock = parseDateTime(data.serverTime);
+      if (clock) {
+        serverClock.value = clock;
+        currentTime.value = formatDateTime(clock);
+      }
+    }
+
+    if (!name) {
+      if (data?.currentSeats || data?.seats) {
+        applySeatsData(data.currentSeats || data.seats);
+        return;
+      }
+
+      if (data?.latestEnvironment || data?.environment) {
+        applyEnvironmentData(data.latestEnvironment || data.environment);
+        return;
+      }
+
+      if (data?.currentAuth || data?.auth) {
+        Object.assign(auth, normalizeAuth(data.currentAuth || data.auth));
+        return;
+      }
+    }
+
+    if (name === "environment-updated") {
+      applyEnvironmentData(data?.latestEnvironment || data?.environment || data);
+      if (data?.log || data?.logEntry) {
+        applyRealtimeLogEntry(data.log || data.logEntry);
+      }
+      return;
+    }
+
+    if (
+      name === "seat-powered-on" ||
+      name === "seat-powered-off" ||
+      name === "seat-session-started" ||
+      name === "seat-session-finished" ||
+      name === "seat-status-updated" ||
+      name === "seat-updated"
+    ) {
+      const seatPayload = data?.seat || data?.currentSeat || data?.seatState || data;
+      if (seatPayload) {
+        applySingleSeatData(seatPayload);
+      } else if (Array.isArray(data?.seats) || Array.isArray(data?.currentSeats)) {
+        applySeatsData(data.seats || data.currentSeats);
+      }
+
+      if (data?.log || data?.logEntry) {
+        applyRealtimeLogEntry(data.log || data.logEntry);
+      }
+      return;
+    }
+
+    if (name === "auth-event-updated") {
+      Object.assign(auth, normalizeAuth(data?.currentAuth || data?.auth || data));
+      if (data?.seat || data?.currentSeat) {
+        applySingleSeatData(data.seat || data.currentSeat);
+      }
+      if (data?.log || data?.logEntry) {
+        applyRealtimeLogEntry(data.log || data.logEntry);
+      }
+      return;
+    }
+
+    if (name === "system-log-created" || name === "log-created") {
+      applyRealtimeLogEntry(data?.log || data?.logEntry || data);
+      return;
+    }
+
+    scheduleRefresh();
+  }
+
   async function refreshDashboardData() {
     const [overviewResult, seatsResult, environmentResult, logsResult] = await Promise.allSettled([
       getDashboardOverview(),
@@ -533,6 +676,45 @@ export function useDashboard() {
       });
       scheduledRefresh = null;
     }, 180);
+  }
+
+  function clearSocketReconnectTimer() {
+    if (socketReconnectTimer) {
+      clearTimeout(socketReconnectTimer);
+      socketReconnectTimer = null;
+    }
+  }
+
+  function enableSseFallback() {
+    if (socketFallbackEnabled || streamSource) {
+      return;
+    }
+
+    socketFallbackEnabled = true;
+    try {
+      streamSource = subscribeToDashboardEvents(
+        (eventName, payload) => {
+          handleRealtimeUpdate(eventName, payload);
+        },
+        (error) => {
+          console.warn("Dashboard SSE stream error", error);
+          scheduleRefresh();
+        },
+      );
+    } catch (error) {
+      console.warn("Failed to connect dashboard SSE stream", error);
+    }
+  }
+
+  function scheduleSocketReconnect() {
+    if (socketFallbackEnabled || socketReconnectTimer) {
+      return;
+    }
+
+    socketReconnectTimer = setTimeout(() => {
+      socketReconnectTimer = null;
+      connectStream();
+    }, 1500);
   }
 
   const isSeatPending = (seat) => Boolean(seat?.seatId) && pendingSeatIds.has(seat.seatId);
@@ -592,16 +774,35 @@ export function useDashboard() {
 
   function connectStream() {
     try {
-      streamSource = subscribeToDashboardEvents(
-        () => {
-          scheduleRefresh();
+      clearSocketReconnectTimer();
+      socketHasOpened = false;
+      socketSource = subscribeToDashboardSocket(
+        (message) => {
+          socketHasOpened = true;
+          const eventName = resolveRealtimeEventName(message);
+          const payload = resolveRealtimePayload(message);
+          handleRealtimeUpdate(eventName, payload);
         },
         (error) => {
-          console.warn("Dashboard SSE stream error", error);
+          console.warn("Dashboard WebSocket error", error);
+          if (!socketHasOpened) {
+            enableSseFallback();
+            return;
+          }
+          scheduleSocketReconnect();
+        },
+        () => {
+          socketHasOpened = true;
+          socketFallbackEnabled = false;
+          if (streamSource) {
+            streamSource.close();
+            streamSource = null;
+          }
         },
       );
     } catch (error) {
-      console.warn("Failed to connect dashboard SSE stream", error);
+      console.warn("Failed to connect dashboard WebSocket", error);
+      enableSseFallback();
     }
   }
 
@@ -625,7 +826,17 @@ export function useDashboard() {
       clearTimeout(scheduledRefresh);
     }
 
+    clearSocketReconnectTimer();
+
     clearSeatActionNoticeTimer();
+
+    if (socketSource) {
+      const socket = socketSource;
+      socketSource = null;
+      socket.onclose = null;
+      socket.onerror = null;
+      socket.close();
+    }
 
     if (streamSource) {
       streamSource.close();

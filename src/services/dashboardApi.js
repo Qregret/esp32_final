@@ -1,4 +1,5 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const DASHBOARD_WS_URL = (import.meta.env.VITE_DASHBOARD_WS_URL || "").trim();
 
 const EVENT_NAMES = [
   "auth-event-updated",
@@ -11,6 +12,24 @@ const EVENT_NAMES = [
 
 function buildUrl(path) {
   return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+}
+
+function buildWebSocketUrl() {
+  if (DASHBOARD_WS_URL) {
+    return DASHBOARD_WS_URL;
+  }
+
+  if (API_BASE_URL) {
+    const url = new URL(API_BASE_URL);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    url.pathname = "/ws/dashboard";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  }
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}/ws/dashboard`;
 }
 
 async function request(path, options = {}) {
@@ -89,4 +108,34 @@ export function subscribeToDashboardEvents(onUpdate, onError) {
   };
 
   return source;
+}
+
+export function subscribeToDashboardSocket(onUpdate, onError, onOpen) {
+  const socket = new WebSocket(buildWebSocketUrl());
+
+  socket.onopen = () => {
+    onOpen?.();
+  };
+
+  socket.onmessage = (event) => {
+    let payload = null;
+
+    try {
+      payload = event.data ? JSON.parse(event.data) : null;
+    } catch {
+      payload = event.data ?? null;
+    }
+
+    onUpdate?.(payload);
+  };
+
+  socket.onerror = (error) => {
+    onError?.(error);
+  };
+
+  socket.onclose = (event) => {
+    onError?.(event);
+  };
+
+  return socket;
 }
