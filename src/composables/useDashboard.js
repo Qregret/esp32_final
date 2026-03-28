@@ -171,6 +171,15 @@ function mapSeatStatus(value, hasUser, powerOn) {
   return powerOn ? "standby" : "idle";
 }
 
+function resolveSeatDuration(now, startedAt, fallbackSeconds = 0) {
+  if (startedAt) {
+    return Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 1000));
+  }
+
+  const parsedFallback = Number(fallbackSeconds);
+  return Number.isFinite(parsedFallback) ? Math.max(0, parsedFallback) : 0;
+}
+
 function normalizeSeats(list, clockDate, localSeatStartTimes) {
   const now = clockDate || new Date();
 
@@ -182,9 +191,7 @@ function normalizeSeats(list, clockDate, localSeatStartTimes) {
     const startedAt = parseDateTime(item.currentSessionStartedAt || item.startedAt);
     const rememberedStartedAt = seatId && power ? localSeatStartTimes.get(seatId) ?? null : null;
     const effectiveStartedAt = startedAt || rememberedStartedAt;
-    const durationSeconds = effectiveStartedAt
-      ? Math.max(0, Math.floor((now.getTime() - effectiveStartedAt.getTime()) / 1000))
-      : Number(item.durationSeconds || item.seconds || 0);
+    const durationSeconds = resolveSeatDuration(now, effectiveStartedAt, item.durationSeconds ?? item.seconds);
     const normalizedStatus = mapSeatStatus(item.seatStatus, Boolean(user), power);
 
     if (seatId) {
@@ -202,7 +209,7 @@ function normalizeSeats(list, clockDate, localSeatStartTimes) {
       power,
       user,
       seconds: Number.isFinite(durationSeconds) ? durationSeconds : 0,
-      tracking: power && (Boolean(effectiveStartedAt) || Number(durationSeconds) > 0),
+      tracking: power && Boolean(effectiveStartedAt),
       currentUserId: item.currentUserId ?? item.userId ?? null,
       seatStatus: normalizedStatus,
       currentSessionStartedAt: effectiveStartedAt,
@@ -384,11 +391,14 @@ export function useDashboard() {
   }
 
   function tickClock() {
-    serverClock.value = new Date(serverClock.value.getTime() + 1000);
-    currentTime.value = formatDateTime(serverClock.value);
+    const nextClock = new Date(serverClock.value.getTime() + 1000);
+    serverClock.value = nextClock;
+    currentTime.value = formatDateTime(nextClock);
     seats.value.forEach((seat) => {
-      if (seat.tracking) {
-        seat.seconds += 1;
+      if (seat.currentSessionStartedAt) {
+        seat.seconds = resolveSeatDuration(nextClock, seat.currentSessionStartedAt);
+      } else if (!seat.power) {
+        seat.seconds = 0;
       }
     });
   }
@@ -500,7 +510,12 @@ export function useDashboard() {
       const currentUserId = updatedSeat.currentUserId ?? null;
       const hasUser = currentUserId !== null;
       const seatStatus = mapSeatStatus(updatedSeat.seatStatus, hasUser, power);
-      const startedAt = parseDateTime(updatedSeat.currentSessionStartedAt) || (power ? new Date() : null);
+      const startedAt = parseDateTime(updatedSeat.currentSessionStartedAt || updatedSeat.startedAt);
+      const durationSeconds = resolveSeatDuration(
+        serverClock.value,
+        startedAt,
+        updatedSeat.durationSeconds ?? updatedSeat.seconds,
+      );
 
       if (power && startedAt) {
         localSeatStartTimes.set(seatId, startedAt);
@@ -515,8 +530,8 @@ export function useDashboard() {
         seatStatus,
         currentUserId,
         user: hasUser ? seat.user : "",
-        seconds: power ? seat.seconds : 0,
-        tracking: Boolean(power),
+        seconds: power ? durationSeconds : 0,
+        tracking: power && Boolean(startedAt),
         currentSessionStartedAt: startedAt,
       };
     });
