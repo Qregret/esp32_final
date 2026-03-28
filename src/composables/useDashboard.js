@@ -303,7 +303,17 @@ function resolveRealtimePayload(message) {
     return null;
   }
 
-  return message.payload ?? message.data ?? message.body ?? message;
+  const payload = message.payload ?? message.data ?? message.body ?? message;
+
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    return {
+      ...payload,
+      timestamp: payload.timestamp ?? message.timestamp ?? null,
+      serverTime: payload.serverTime ?? message.serverTime ?? message.timestamp ?? null,
+    };
+  }
+
+  return payload;
 }
 
 export function useDashboard() {
@@ -333,7 +343,7 @@ export function useDashboard() {
   let socketFallbackEnabled = false;
   let socketHasOpened = false;
 
-  const activeSeatCount = computed(() => seats.value.filter((seat) => seat.occupied).length);
+  const activeSeatCount = computed(() => seats.value.filter((seat) => seat.power).length);
 
   const seatLabel = (id) => {
     const match = String(id).match(/(\d+)/);
@@ -554,8 +564,8 @@ export function useDashboard() {
     const name = String(eventName || "").trim();
     const data = payload ?? null;
 
-    if (data?.serverTime) {
-      const clock = parseDateTime(data.serverTime);
+    if (data?.serverTime || data?.timestamp) {
+      const clock = parseDateTime(data.serverTime ?? data.timestamp);
       if (clock) {
         serverClock.value = clock;
         currentTime.value = formatDateTime(clock);
