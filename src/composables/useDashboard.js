@@ -653,6 +653,15 @@ export function useDashboard() {
     }
   }
 
+  async function refreshSeatSnapshot() {
+    try {
+      const latestSeats = await getCurrentSeats();
+      applySeatsData(latestSeats);
+    } catch (error) {
+      console.warn("Failed to refresh current seats snapshot", error);
+    }
+  }
+
   function scheduleRefresh() {
     if (scheduledRefresh) {
       clearTimeout(scheduledRefresh);
@@ -782,6 +791,7 @@ export function useDashboard() {
     });
 
     refreshTimers.push(setInterval(tickClock, 1000));
+    refreshTimers.push(setInterval(refreshSeatSnapshot, 3000));
     connectStream();
   });
 
