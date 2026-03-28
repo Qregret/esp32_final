@@ -288,7 +288,8 @@ function resolveRealtimeEventName(message) {
   }
 
   return String(
-    message.eventName ??
+    message.eventType ??
+      message.eventName ??
       message.event ??
       message.type ??
       message.topic ??

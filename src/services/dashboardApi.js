@@ -22,14 +22,14 @@ function buildWebSocketUrl() {
   if (API_BASE_URL) {
     const url = new URL(API_BASE_URL);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    url.pathname = "/ws/dashboard";
+    url.pathname = "/ws/stream/events";
     url.search = "";
     url.hash = "";
     return url.toString();
   }
 
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/ws/dashboard`;
+  return `${protocol}//${window.location.host}/ws/stream/events`;
 }
 
 async function request(path, options = {}) {
