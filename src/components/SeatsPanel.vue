@@ -41,9 +41,10 @@ const toggleSeat = (seat) => {
 };
 
 const formatDuration = (seconds) => {
-  const hours = String(Math.floor(seconds / 3600)).padStart(2, "0");
-  const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
-  const remain = String(seconds % 60).padStart(2, "0");
+  const safeSeconds = Math.max(0, Number(seconds) || 0);
+  const hours = String(Math.floor(safeSeconds / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((safeSeconds % 3600) / 60)).padStart(2, "0");
+  const remain = String(safeSeconds % 60).padStart(2, "0");
   return `${hours}:${minutes}:${remain}`;
 };
 </script>

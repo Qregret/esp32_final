@@ -16,6 +16,7 @@ const LOG_COLORS = {
   HTTP: "log-blue",
   AI: "log-green",
   GPIO: "log-fuchsia",
+  SESSION: "log-green",
   SYS: "log-slate",
 };
 
@@ -41,10 +42,10 @@ const CAMERA_STATUS_TEXT = {
 };
 
 const STATUS_TEXT_MAP = {
-  "Auth granted. Starting seat linkage.": "认证通过，正在联动座位设备…",
+  "Auth granted. Starting seat linkage.": "认证通过，正在联动座位设备",
   "Auth granted": "认证通过",
   "Auth denied": "认证失败，请重试",
-  "Auth processing": "正在进行身份比对…",
+  "Auth processing": "正在进行身份比对",
 };
 
 function pad(value) {
@@ -63,21 +64,21 @@ function parseDateTime(value) {
   if (!value) return null;
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
 
-  // 兼容数组格式 [2026, 3, 25, 13, 50, 8]
   if (Array.isArray(value)) {
     const [y, m, d, h = 0, min = 0, s = 0] = value;
-    return new Date(y, m - 1, d, h, min, s);
+    const next = new Date(y, m - 1, d, h, min, s);
+    return Number.isNaN(next.getTime()) ? null : next;
   }
 
   if (typeof value === "number") {
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? null : d;
+    const next = new Date(value);
+    return Number.isNaN(next.getTime()) ? null : next;
   }
 
   if (typeof value === "string") {
     const normalized = value.includes(" ") ? value.replace(" ", "T") : value;
-    const parsed = new Date(normalized);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
+    const next = new Date(normalized);
+    return Number.isNaN(next.getTime()) ? null : next;
   }
 
   return null;
@@ -85,8 +86,7 @@ function parseDateTime(value) {
 
 function translateCameraStatus(value) {
   if (!value) return "监控中";
-  const mapped = CAMERA_STATUS_TEXT[String(value).trim().toLowerCase()];
-  return mapped || String(value);
+  return CAMERA_STATUS_TEXT[String(value).trim().toLowerCase()] || String(value);
 }
 
 function translateStatusText(value, fallback) {
@@ -98,7 +98,7 @@ function getDefaultAuth() {
   return {
     cameraStatus: "监控中",
     flowState: "idle",
-    statusText: "会话已建立，等待下一次认证请求…",
+    statusText: "会话已建立，等待下一次认证请求",
     rfidUid: "",
     similarity: 0,
     result: "standby",
@@ -108,8 +108,8 @@ function getDefaultAuth() {
 
 function getDefaultEnvironment() {
   return {
-    temperature: 25.0,
-    humidity: 45.0,
+    temperature: 25,
+    humidity: 45,
     tempGauge: 63,
     humidityGauge: 45,
   };
@@ -134,7 +134,7 @@ function normalizeAuth(authSource) {
   return {
     cameraStatus: translateCameraStatus(authSource.cameraStatus),
     flowState: authSource.flowState || "idle",
-    statusText: translateStatusText(authSource.statusText, "会话已建立，等待下一次认证请求…"),
+    statusText: translateStatusText(authSource.statusText, "会话已建立，等待下一次认证请求"),
     rfidUid: authSource.rfidUid || "",
     similarity: Number.isFinite(similarity) ? similarity : 0,
     result,
@@ -160,15 +160,10 @@ function normalizeEnvironment(source) {
   };
 }
 
-function mapSeatStatus(value, hasUser, powerOn) {
+function mapSeatStatus(value, powerOn) {
   const normalized = String(value || "").toLowerCase();
   if (normalized === "fault") return "fault";
-  if (normalized === "occupied") return "occupied";
-  if (normalized === "idle" && powerOn && hasUser) return "occupied";
-  if (normalized === "idle" && powerOn) return "standby";
-  if (normalized === "idle") return "idle";
-  if (hasUser && powerOn) return "occupied";
-  return powerOn ? "standby" : "idle";
+  return powerOn ? "occupied" : "idle";
 }
 
 function resolveSeatDuration(now, startedAt, fallbackSeconds = 0) {
@@ -194,6 +189,36 @@ function resolveSeatStartedAt(source) {
   );
 }
 
+function normalizeSeatCodeLabel(value) {
+  const match = String(value ?? "").match(/(\d+)/);
+  if (!match) return String(value || "Seat");
+  return `Seat-${pad(Number(match[1]))}`;
+}
+
+function normalizeLogMessage(type, message) {
+  const raw = String(message ?? "").trim();
+  const upperType = String(type || "").toUpperCase();
+
+  if (!raw) {
+    return "";
+  }
+
+  const seatCode = normalizeSeatCodeLabel(raw);
+  const lower = raw.toLowerCase();
+
+  if (lower === "environment reading received") return "环境数据已接收";
+  if (lower.includes("power on")) return `${seatCode}开启`;
+  if (lower.includes("power off")) return `${seatCode}关闭`;
+  if (lower.includes("session started")) return `${seatCode}开始使用`;
+  if (lower.includes("session finished")) return `${seatCode}结束使用`;
+  if (lower.includes("synced to occupied")) return `${seatCode}同步开启`;
+  if (lower.includes("synced to idle")) return `${seatCode}同步关闭`;
+  if (upperType === "GPIO" && /开启|打开|上电/.test(raw)) return `${seatCode}开启`;
+  if (upperType === "GPIO" && /关闭|断电|关机/.test(raw)) return `${seatCode}关闭`;
+
+  return raw;
+}
+
 function normalizeSeats(list, clockDate, localSeatStartTimes) {
   const now = clockDate || new Date();
 
@@ -201,15 +226,13 @@ function normalizeSeats(list, clockDate, localSeatStartTimes) {
     const seatId = item.seatId ?? item.id;
     const seatCode = item.seatCode || item.seatName || `Seat-${pad(seatId || 0)}`;
     const power = String(item.powerStatus || item.power || "off").toLowerCase() === "on" || item.power === true;
-    const user = item.currentUserName || item.userName || item.user || "";
-    const startedAt = resolveSeatStartedAt(item);
-    const rememberedStartedAt = seatId && power ? localSeatStartTimes.get(seatId) ?? null : null;
-    const effectiveStartedAt = startedAt || rememberedStartedAt;
-    const durationSeconds = resolveSeatDuration(now, effectiveStartedAt, item.durationSeconds ?? item.seconds);
-    const normalizedStatus = mapSeatStatus(item.seatStatus, Boolean(user), power);
+    const startedAt = power ? resolveSeatStartedAt(item) || (seatId ? localSeatStartTimes.get(seatId) ?? null : null) : null;
+    const durationSeconds = power ? resolveSeatDuration(now, startedAt, item.durationSeconds ?? item.seconds) : 0;
+    const normalizedStatus = mapSeatStatus(item.seatStatus, power);
+    const user = power ? (item.currentUserName || item.userName || item.user || "临时使用者") : "";
 
     if (seatId) {
-      if (startedAt) {
+      if (power && startedAt) {
         localSeatStartTimes.set(seatId, startedAt);
       } else if (!power) {
         localSeatStartTimes.delete(seatId);
@@ -223,10 +246,11 @@ function normalizeSeats(list, clockDate, localSeatStartTimes) {
       power,
       user,
       seconds: Number.isFinite(durationSeconds) ? durationSeconds : 0,
-      tracking: power && Boolean(effectiveStartedAt),
-      currentUserId: item.currentUserId ?? item.userId ?? null,
+      tracking: power && Boolean(startedAt),
+      currentUserId: power ? (item.currentUserId ?? item.userId ?? 0) : null,
       seatStatus: normalizedStatus,
-      currentSessionStartedAt: effectiveStartedAt,
+      currentSessionStartedAt: power ? startedAt : null,
+      hourlyRate: Number(item.hourlyRate ?? 2),
     };
   });
 }
@@ -240,7 +264,7 @@ function normalizeLogs(list) {
       return {
         time: createdAt ? formatTime(createdAt) : item.time || "--:--:--",
         type,
-        message: item.message || "",
+        message: normalizeLogMessage(type, item.message || ""),
         colorClass: LOG_COLORS[type] ?? "log-slate",
         _sortTime: createdAt ? createdAt.getTime() : null,
         _sortIndex: index,
@@ -250,7 +274,6 @@ function normalizeLogs(list) {
       if (left._sortTime !== null && right._sortTime !== null) {
         return left._sortTime - right._sortTime || left._sortIndex - right._sortIndex;
       }
-
       if (left._sortTime !== null) return -1;
       if (right._sortTime !== null) return 1;
       return left._sortIndex - right._sortIndex;
@@ -271,36 +294,6 @@ function formatSeatActionError(error) {
   }
 
   return `${normalized.slice(0, 117)}...`;
-}
-
-function normalizeLocalLogMessage(type, message) {
-  const raw = String(message ?? "").trim();
-
-  if (String(type).toUpperCase() !== "GPIO") {
-    return raw;
-  }
-
-  const seatMatch = raw.match(/(\d+)/);
-  const seatCode = seatMatch ? `Seat-${pad(Number(seatMatch[1]))}` : "Seat";
-  const lowered = raw.toLowerCase();
-
-  if (lowered.includes("power on")) {
-    return `${seatCode} power on`;
-  }
-
-  if (lowered.includes("power off")) {
-    return `${seatCode} power off`;
-  }
-
-  if (/开启|打开|上电|开机/.test(raw)) {
-    return `${seatCode} power on`;
-  }
-
-  if (/关闭|断电|关机/.test(raw)) {
-    return `${seatCode} power off`;
-  }
-
-  return raw;
 }
 
 function resolveRealtimeEventName(message) {
@@ -325,21 +318,15 @@ function resolveRealtimePayload(message) {
   }
 
   const payload = message.payload ?? message.data ?? message.body ?? message;
-
   if (payload && typeof payload === "object" && !Array.isArray(payload)) {
-    return {
-      ...payload,
-      timestamp: payload.timestamp ?? message.timestamp ?? null,
-      serverTime: payload.serverTime ?? message.serverTime ?? message.timestamp ?? null,
-    };
+    return payload;
   }
-
   return payload;
 }
 
 export function useDashboard() {
-  const serverClock = ref(new Date());
-  const currentTime = ref(formatDateTime(serverClock.value));
+  const browserClock = ref(new Date());
+  const currentTime = ref(formatDateTime(browserClock.value));
   const mobileTab = ref("auth");
   const isMobileView = ref(typeof window !== "undefined" ? window.innerWidth < 768 : false);
   const auth = reactive(getDefaultAuth());
@@ -371,26 +358,19 @@ export function useDashboard() {
     return match ? `座位${pad(Number(match[1]))}` : String(id);
   };
 
-  const seatLogLabel = (seat) => {
-    const source = seat?.id ?? seat?.seatId ?? "";
-    const match = String(source).match(/(\d+)/);
-    return match ? `Seat-${pad(Number(match[1]))}` : String(source || "Seat");
-  };
-
   const seatStatusText = (seat) => {
     if (seat.seatStatus === "fault") return "故障";
-    if (seat.seatStatus === "occupied") return "使用中";
-    if (seat.seatStatus === "standby") return "待机中";
-    return "空闲";
+    return seat.power ? "使用中" : "空闲";
   };
 
   const seatCharge = (seat) => {
-    if (!seat.tracking) return 0;
-    const billableHours = Math.ceil(Math.max(0, seat.seconds) / 3600);
-    return Math.min(20, billableHours * 2);
+    if (!seat.power || !seat.tracking) return 0;
+    const hourlyRate = Number(seat.hourlyRate ?? 2);
+    const billableHours = Math.max(1, Math.ceil(Math.max(0, seat.seconds) / 3600));
+    return Number((billableHours * hourlyRate).toFixed(2));
   };
 
-  const seatChargeText = (seat) => `$${seatCharge(seat)}`;
+  const seatChargeText = (seat) => `$${seatCharge(seat).toFixed(0)}`;
   const seatChargePercent = (seat) => Math.min(100, Math.round((seatCharge(seat) / 20) * 100));
 
   const statusToneClass = (state) => {
@@ -405,13 +385,13 @@ export function useDashboard() {
   }
 
   function tickClock() {
-    const nextClock = new Date(serverClock.value.getTime() + 1000);
-    serverClock.value = nextClock;
+    const nextClock = new Date();
+    browserClock.value = nextClock;
     currentTime.value = formatDateTime(nextClock);
     seats.value.forEach((seat) => {
-      if (seat.currentSessionStartedAt) {
+      if (seat.power && seat.currentSessionStartedAt) {
         seat.seconds = resolveSeatDuration(nextClock, seat.currentSessionStartedAt);
-      } else if (!seat.power) {
+      } else {
         seat.seconds = 0;
       }
     });
@@ -420,30 +400,24 @@ export function useDashboard() {
   function applyOverviewData(overview) {
     if (!overview) return;
 
-    const clock = parseDateTime(overview.serverTime);
-    if (clock) {
-      serverClock.value = clock;
-      currentTime.value = formatDateTime(clock);
-    }
-
     Object.assign(auth, normalizeAuth(overview.currentAuth || overview.auth));
     Object.assign(environment, normalizeEnvironment(overview.latestEnvironment || overview.environment));
 
-    const seatList = normalizeSeats(overview.currentSeats || overview.seats, serverClock.value, localSeatStartTimes);
+    const seatList = normalizeSeats(overview.currentSeats || overview.seats, new Date(), localSeatStartTimes);
     if (seatList.length) {
       seats.value = seatList;
     }
 
     const logList = normalizeLogs(overview.recentLogs || overview.logs);
-    if (logList.length) {
+    if (logList.length || Array.isArray(overview.recentLogs || overview.logs)) {
       logs.value = logList;
       logEventCount.value = Math.max(logEventCount.value, logList.length);
     }
   }
 
   function applySeatsData(seatList) {
-    const normalized = normalizeSeats(seatList, serverClock.value, localSeatStartTimes);
-    if (normalized.length) {
+    const normalized = normalizeSeats(seatList, new Date(), localSeatStartTimes);
+    if (normalized.length || Array.isArray(seatList)) {
       seats.value = normalized;
     }
   }
@@ -460,12 +434,11 @@ export function useDashboard() {
     }
   }
 
-  // 👑 核心修复：这里原本依赖可能不同步的 serverClock，现在强制使用浏览器真实时间
   function appendLocalLog(type, message, createdAt = new Date()) {
     const [entry] = normalizeLogs([
       {
         type,
-        message: normalizeLocalLogMessage(type, message),
+        message,
         createdAt,
       },
     ]);
@@ -515,57 +488,31 @@ export function useDashboard() {
       return;
     }
 
-    seats.value = seats.value.map((seat) => {
-      if (seat.seatId !== seatId) {
-        return seat;
-      }
+    const isPowerOn = String(updatedSeat.powerStatus || "").toLowerCase() === "on";
+    if (isPowerOn && !resolveSeatStartedAt(updatedSeat)) {
+      localSeatStartTimes.set(seatId, new Date());
+    }
+    if (!isPowerOn) {
+      localSeatStartTimes.delete(seatId);
+    }
 
-      const power = String(updatedSeat.powerStatus || "").toLowerCase() === "on";
-      const currentUserId = updatedSeat.currentUserId ?? null;
-      const hasUser = currentUserId !== null;
-      const seatStatus = mapSeatStatus(updatedSeat.seatStatus, hasUser, power);
-      const startedAt = resolveSeatStartedAt(updatedSeat);
-      const durationSeconds = resolveSeatDuration(
-        serverClock.value,
-        startedAt,
-        updatedSeat.durationSeconds ?? updatedSeat.seconds,
-      );
+    const normalizedSeat = normalizeSeats([updatedSeat], new Date(), localSeatStartTimes)[0];
+    if (!normalizedSeat) {
+      return;
+    }
 
-      if (power && startedAt) {
-        localSeatStartTimes.set(seatId, startedAt);
-      } else {
-        localSeatStartTimes.delete(seatId);
-      }
-
-      return {
-        ...seat,
-        power,
-        occupied: seatStatus === "occupied",
-        seatStatus,
-        currentUserId,
-        user: hasUser ? seat.user : "",
-        seconds: power ? durationSeconds : 0,
-        tracking: power && Boolean(startedAt),
-        currentSessionStartedAt: startedAt,
-      };
-    });
+    seats.value = seats.value.map((seat) => (seat.seatId === seatId ? normalizedSeat : seat));
   }
 
   function applySingleSeatData(seatLike) {
-    const normalized = normalizeSeats([seatLike], serverClock.value, localSeatStartTimes)[0];
-
+    const normalized = normalizeSeats([seatLike], new Date(), localSeatStartTimes)[0];
     if (!normalized) {
       return;
     }
 
     const existingIndex = seats.value.findIndex((seat) => seat.seatId === normalized.seatId);
-
     if (existingIndex === -1) {
-      seats.value = [...seats.value, normalized].sort((left, right) => {
-        const leftId = Number(left.seatId ?? 0);
-        const rightId = Number(right.seatId ?? 0);
-        return leftId - rightId;
-      });
+      seats.value = [...seats.value, normalized].sort((left, right) => Number(left.seatId ?? 0) - Number(right.seatId ?? 0));
       return;
     }
 
@@ -593,25 +540,15 @@ export function useDashboard() {
     const name = String(eventName || "").trim();
     const data = payload ?? null;
 
-    if (data?.serverTime || data?.timestamp) {
-      const clock = parseDateTime(data.serverTime ?? data.timestamp);
-      if (clock) {
-        serverClock.value = clock;
-        currentTime.value = formatDateTime(clock);
-      }
-    }
-
     if (!name) {
       if (data?.currentSeats || data?.seats) {
         applySeatsData(data.currentSeats || data.seats);
         return;
       }
-
       if (data?.latestEnvironment || data?.environment) {
         applyEnvironmentData(data.latestEnvironment || data.environment);
         return;
       }
-
       if (data?.currentAuth || data?.auth) {
         Object.assign(auth, normalizeAuth(data.currentAuth || data.auth));
         return;
@@ -674,21 +611,10 @@ export function useDashboard() {
       getRecentLogs(20),
     ]);
 
-    if (overviewResult.status === "fulfilled") {
-      applyOverviewData(overviewResult.value);
-    }
-
-    if (seatsResult.status === "fulfilled") {
-      applySeatsData(seatsResult.value);
-    }
-
-    if (environmentResult.status === "fulfilled") {
-      applyEnvironmentData(environmentResult.value);
-    }
-
-    if (logsResult.status === "fulfilled") {
-      applyLogsData(logsResult.value);
-    }
+    if (overviewResult.status === "fulfilled") applyOverviewData(overviewResult.value);
+    if (seatsResult.status === "fulfilled") applySeatsData(seatsResult.value);
+    if (environmentResult.status === "fulfilled") applyEnvironmentData(environmentResult.value);
+    if (logsResult.status === "fulfilled") applyLogsData(logsResult.value);
 
     if (
       overviewResult.status === "rejected" &&
@@ -733,9 +659,7 @@ export function useDashboard() {
     socketFallbackEnabled = true;
     try {
       streamSource = subscribeToDashboardEvents(
-        (eventName, payload) => {
-          handleRealtimeUpdate(eventName, payload);
-        },
+        (eventName, payload) => handleRealtimeUpdate(eventName, payload),
         (error) => {
           console.warn("Dashboard SSE stream error", error);
           scheduleRefresh();
@@ -766,10 +690,7 @@ export function useDashboard() {
 
     seatActionError.value = "";
     pendingSeatIds.add(seat.seatId);
-    showSeatActionNotice(
-      `${seat.power ? "正在关闭" : "正在开启"}${buildSeatActionLabel(seat)}`,
-      "processing",
-    );
+    showSeatActionNotice(`${seat.power ? "正在关闭" : "正在开启"}${buildSeatActionLabel(seat)}`, "processing");
 
     const payload = {
       source: "manual_control",
@@ -778,35 +699,20 @@ export function useDashboard() {
     };
 
     try {
-      let updatedSeat = null;
-
-      if (seat.power) {
-        updatedSeat = await powerOffSeat(seat.seatId, payload);
-      } else {
-        updatedSeat = await powerOnSeat(seat.seatId, payload);
-      }
+      const updatedSeat = seat.power
+        ? await powerOffSeat(seat.seatId, payload)
+        : await powerOnSeat(seat.seatId, payload);
 
       applySeatPowerResponse(seat.seatId, updatedSeat);
-      appendLocalLog(
-        "GPIO",
-        `${buildSeatActionLabel(seat)} ${seat.power ? "电源已关闭" : "电源已开启"}`,
-      );
-      showSeatActionNotice(
-        `${buildSeatActionLabel(seat)}${seat.power ? "已关闭" : "已开启"}`,
-        "success",
-        1200,
-      );
+      appendLocalLog("GPIO", `${normalizeSeatCodeLabel(seat.id ?? seat.seatId)}${seat.power ? "关闭" : "开启"}`);
+      showSeatActionNotice(`${buildSeatActionLabel(seat)}${seat.power ? "已关闭" : "已开启"}`, "success", 1200);
       await refreshDashboardData().catch((error) => {
         console.warn("Failed to refresh dashboard data after seat toggle", error);
       });
     } catch (error) {
       console.error("Failed to toggle seat power", error);
       seatActionError.value = formatSeatActionError(error);
-      showSeatActionNotice(
-        `${seat.power ? "关闭" : "开启"}${buildSeatActionLabel(seat)}失败`,
-        "error",
-        1800,
-      );
+      showSeatActionNotice(`${seat.power ? "关闭" : "开启"}${buildSeatActionLabel(seat)}失败`, "error", 1800);
     } finally {
       pendingSeatIds.delete(seat.seatId);
     }
@@ -819,9 +725,7 @@ export function useDashboard() {
       socketSource = subscribeToDashboardSocket(
         (message) => {
           socketHasOpened = true;
-          const eventName = resolveRealtimeEventName(message);
-          const payload = resolveRealtimePayload(message);
-          handleRealtimeUpdate(eventName, payload);
+          handleRealtimeUpdate(resolveRealtimeEventName(message), resolveRealtimePayload(message));
         },
         (error) => {
           console.warn("Dashboard WebSocket error", error);
@@ -848,6 +752,8 @@ export function useDashboard() {
 
   onMounted(() => {
     updateViewport();
+    browserClock.value = new Date();
+    currentTime.value = formatDateTime(browserClock.value);
     window.addEventListener("resize", updateViewport);
 
     refreshDashboardData().catch((error) => {
@@ -862,12 +768,8 @@ export function useDashboard() {
     window.removeEventListener("resize", updateViewport);
     refreshTimers.forEach((timerId) => clearInterval(timerId));
 
-    if (scheduledRefresh) {
-      clearTimeout(scheduledRefresh);
-    }
-
+    if (scheduledRefresh) clearTimeout(scheduledRefresh);
     clearSocketReconnectTimer();
-
     clearSeatActionNoticeTimer();
 
     if (socketSource) {
