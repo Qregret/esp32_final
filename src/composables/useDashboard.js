@@ -180,6 +180,20 @@ function resolveSeatDuration(now, startedAt, fallbackSeconds = 0) {
   return Number.isFinite(parsedFallback) ? Math.max(0, parsedFallback) : 0;
 }
 
+function resolveSeatStartedAt(source) {
+  if (!source || typeof source !== "object") {
+    return null;
+  }
+
+  return parseDateTime(
+    source.powerOnAt ??
+      source.currentPowerStartedAt ??
+      source.powerStartedAt ??
+      source.currentSessionStartedAt ??
+      source.startedAt,
+  );
+}
+
 function normalizeSeats(list, clockDate, localSeatStartTimes) {
   const now = clockDate || new Date();
 
@@ -188,7 +202,7 @@ function normalizeSeats(list, clockDate, localSeatStartTimes) {
     const seatCode = item.seatCode || item.seatName || `Seat-${pad(seatId || 0)}`;
     const power = String(item.powerStatus || item.power || "off").toLowerCase() === "on" || item.power === true;
     const user = item.currentUserName || item.userName || item.user || "";
-    const startedAt = parseDateTime(item.currentSessionStartedAt || item.startedAt);
+    const startedAt = resolveSeatStartedAt(item);
     const rememberedStartedAt = seatId && power ? localSeatStartTimes.get(seatId) ?? null : null;
     const effectiveStartedAt = startedAt || rememberedStartedAt;
     const durationSeconds = resolveSeatDuration(now, effectiveStartedAt, item.durationSeconds ?? item.seconds);
@@ -510,7 +524,7 @@ export function useDashboard() {
       const currentUserId = updatedSeat.currentUserId ?? null;
       const hasUser = currentUserId !== null;
       const seatStatus = mapSeatStatus(updatedSeat.seatStatus, hasUser, power);
-      const startedAt = parseDateTime(updatedSeat.currentSessionStartedAt || updatedSeat.startedAt);
+      const startedAt = resolveSeatStartedAt(updatedSeat);
       const durationSeconds = resolveSeatDuration(
         serverClock.value,
         startedAt,
