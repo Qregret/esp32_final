@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+﻿import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import {
   getCurrentSeats,
   getDashboardOverview,
@@ -30,22 +30,22 @@ const CAMERA_STATUS_TEXT = {
   listening: "监控中",
   rfid_scanned: "RFID 已触发",
   rfid_triggered: "RFID 已触发",
-  image_uploaded: "正在上传画面",
-  uploading: "正在上传画面",
-  uploaded: "正在上传画面",
-  processing: "正在识别",
-  analyzing: "正在识别",
-  recognized: "识别完成",
-  success: "识别完成",
-  failed: "识别失败",
-  error: "识别失败",
+  image_uploaded: "姝ｅ湪涓婁紶鐢婚潰",
+  uploading: "姝ｅ湪涓婁紶鐢婚潰",
+  uploaded: "姝ｅ湪涓婁紶鐢婚潰",
+  processing: "姝ｅ湪璇嗗埆",
+  analyzing: "姝ｅ湪璇嗗埆",
+  recognized: "璇嗗埆瀹屾垚",
+  success: "璇嗗埆瀹屾垚",
+  failed: "璇嗗埆澶辫触",
+  error: "璇嗗埆澶辫触",
 };
 
 const STATUS_TEXT_MAP = {
   "Auth granted. Starting seat linkage.": "认证通过，正在联动座位设备",
-  "Auth granted": "认证通过",
-  "Auth denied": "认证失败，请重试",
-  "Auth processing": "正在进行身份比对",
+  "Auth granted": "璁よ瘉閫氳繃",
+  "Auth denied": "璁よ瘉澶辫触锛岃閲嶈瘯",
+  "Auth processing": "姝ｅ湪杩涜韬唤姣斿",
 };
 
 function pad(value) {
@@ -102,7 +102,7 @@ function getDefaultAuth() {
     rfidUid: "",
     similarity: 0,
     result: "standby",
-    resultLabel: "系统待机中",
+    resultLabel: "系统待命中",
   };
 }
 
@@ -124,11 +124,11 @@ function normalizeAuth(authSource) {
   const userName = authSource.userName || "";
   const similarity = Number(authSource.similarity ?? 0);
 
-  let resultLabel = "系统待机中";
+  let resultLabel = "系统待命中";
   if (result === "granted") {
-    resultLabel = userName ? `${userName} 身份确认成功` : "认证通过";
+    resultLabel = userName ? `${userName} 韬唤纭鎴愬姛` : "璁よ瘉閫氳繃";
   } else if (result === "denied") {
-    resultLabel = userName ? `${userName} 身份认证失败` : "认证未通过";
+    resultLabel = userName ? `${userName} 韬唤璁よ瘉澶辫触` : "璁よ瘉鏈€氳繃";
   }
 
   return {
@@ -189,6 +189,14 @@ function resolveSeatStartedAt(source) {
   );
 }
 
+function chooseSeatStartedAt(remoteStartedAt, localStartedAt) {
+  if (remoteStartedAt && localStartedAt) {
+    return localStartedAt.getTime() >= remoteStartedAt.getTime() ? localStartedAt : remoteStartedAt;
+  }
+
+  return localStartedAt || remoteStartedAt || null;
+}
+
 function normalizeSeatCodeLabel(value) {
   const match = String(value ?? "").match(/(\d+)/);
   if (!match) return String(value || "Seat");
@@ -226,7 +234,9 @@ function normalizeSeats(list, clockDate, localSeatStartTimes) {
     const seatId = item.seatId ?? item.id;
     const seatCode = item.seatCode || item.seatName || `Seat-${pad(seatId || 0)}`;
     const power = String(item.powerStatus || item.power || "off").toLowerCase() === "on" || item.power === true;
-    const startedAt = power ? resolveSeatStartedAt(item) || (seatId ? localSeatStartTimes.get(seatId) ?? null : null) : null;
+    const remoteStartedAt = power ? resolveSeatStartedAt(item) : null;
+    const localStartedAt = seatId ? localSeatStartTimes.get(seatId) ?? null : null;
+    const startedAt = power ? chooseSeatStartedAt(remoteStartedAt, localStartedAt) : null;
     const durationSeconds = power ? resolveSeatDuration(now, startedAt, item.durationSeconds ?? item.seconds) : 0;
     const normalizedStatus = mapSeatStatus(item.seatStatus, power);
     const user = power ? (item.currentUserName || item.userName || item.user || "临时使用者") : "";
@@ -355,11 +365,11 @@ export function useDashboard() {
 
   const seatLabel = (id) => {
     const match = String(id).match(/(\d+)/);
-    return match ? `座位${pad(Number(match[1]))}` : String(id);
+    return match ? `搴т綅${pad(Number(match[1]))}` : String(id);
   };
 
   const seatStatusText = (seat) => {
-    if (seat.seatStatus === "fault") return "故障";
+    if (seat.seatStatus === "fault") return "鏁呴殰";
     return seat.power ? "使用中" : "空闲";
   };
 
@@ -489,7 +499,7 @@ export function useDashboard() {
     }
 
     const isPowerOn = String(updatedSeat.powerStatus || "").toLowerCase() === "on";
-    if (isPowerOn && !resolveSeatStartedAt(updatedSeat)) {
+    if (isPowerOn) {
       localSeatStartTimes.set(seatId, new Date());
     }
     if (!isPowerOn) {
@@ -505,6 +515,18 @@ export function useDashboard() {
   }
 
   function applySingleSeatData(seatLike) {
+    const incomingSeatId = seatLike?.seatId ?? seatLike?.id;
+    const existingSeat = seats.value.find((seat) => seat.seatId === incomingSeatId);
+    const incomingPowerOn = String(seatLike?.powerStatus || "").toLowerCase() === "on" || seatLike?.power === true;
+
+    if (incomingSeatId) {
+      if (incomingPowerOn && !existingSeat?.power) {
+        localSeatStartTimes.set(incomingSeatId, new Date());
+      } else if (!incomingPowerOn) {
+        localSeatStartTimes.delete(incomingSeatId);
+      }
+    }
+
     const normalized = normalizeSeats([seatLike], new Date(), localSeatStartTimes)[0];
     if (!normalized) {
       return;
@@ -704,7 +726,6 @@ export function useDashboard() {
         : await powerOnSeat(seat.seatId, payload);
 
       applySeatPowerResponse(seat.seatId, updatedSeat);
-      appendLocalLog("GPIO", `${normalizeSeatCodeLabel(seat.id ?? seat.seatId)}${seat.power ? "关闭" : "开启"}`);
       showSeatActionNotice(`${buildSeatActionLabel(seat)}${seat.power ? "已关闭" : "已开启"}`, "success", 1200);
       await refreshDashboardData().catch((error) => {
         console.warn("Failed to refresh dashboard data after seat toggle", error);
