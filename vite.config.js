@@ -1,8 +1,9 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 
-const REMOTE_API_TARGET = "https://esp32finalback-production.up.railway.app";
-const REMOTE_WS_TARGET = "wss://esp32finalback-production.up.railway.app";
+const REMOTE_API_TARGET = "http://8.155.145.187:8080";
+const REMOTE_WS_TARGET = "ws://8.155.145.187:8080";
+
 
 export default defineConfig({
   plugins: [vue()],

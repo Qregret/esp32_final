@@ -203,6 +203,35 @@ function normalizeSeatCodeLabel(value) {
   return `Seat-${pad(Number(match[1]))}`;
 }
 
+function resolveSeatIdentity(source) {
+  if (!source || typeof source !== "object") {
+    return { seatId: null, seatCode: null };
+  }
+
+  const candidates = [
+    source.seatId,
+    source.id,
+    source.seatCode,
+    source.seatName,
+  ];
+
+  let seatId = null;
+  for (const candidate of candidates) {
+    const match = String(candidate ?? "").match(/(\d+)/);
+    if (!match) continue;
+    const parsed = Number(match[1]);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      seatId = parsed;
+      break;
+    }
+  }
+
+  return {
+    seatId,
+    seatCode: seatId ? `Seat-${pad(seatId)}` : null,
+  };
+}
+
 function normalizeLogMessage(type, message) {
   const raw = String(message ?? "").trim();
   const upperType = String(type || "").toUpperCase();
@@ -230,9 +259,12 @@ function normalizeLogMessage(type, message) {
 function normalizeSeats(list, clockDate, localSeatStartTimes) {
   const now = clockDate || new Date();
 
-  return (Array.isArray(list) ? list : []).map((item) => {
-    const seatId = item.seatId ?? item.id;
-    const seatCode = item.seatCode || item.seatName || `Seat-${pad(seatId || 0)}`;
+  return (Array.isArray(list) ? list : [])
+    .map((item) => {
+    const { seatId, seatCode } = resolveSeatIdentity(item);
+    if (!seatId || !seatCode) {
+      return null;
+    }
     const power = String(item.powerStatus || item.power || "off").toLowerCase() === "on" || item.power === true;
     const remoteStartedAt = power ? resolveSeatStartedAt(item) : null;
     const localStartedAt = seatId ? localSeatStartTimes.get(seatId) ?? null : null;
@@ -252,6 +284,7 @@ function normalizeSeats(list, clockDate, localSeatStartTimes) {
     return {
       seatId,
       id: seatCode,
+      seatCode,
       occupied: normalizedStatus === "occupied",
       power,
       user,
@@ -262,7 +295,9 @@ function normalizeSeats(list, clockDate, localSeatStartTimes) {
       currentSessionStartedAt: power ? startedAt : null,
       hourlyRate: Number(item.hourlyRate ?? 2),
     };
-  });
+  })
+    .filter(Boolean)
+    .sort((left, right) => left.seatId - right.seatId);
 }
 
 function normalizeLogs(list) {
@@ -516,7 +551,10 @@ export function useDashboard() {
   }
 
   function applySingleSeatData(seatLike) {
-    const incomingSeatId = seatLike?.seatId ?? seatLike?.id;
+    const incomingSeatId = resolveSeatIdentity(seatLike).seatId;
+    if (!incomingSeatId) {
+      return;
+    }
     const existingSeat = seats.value.find((seat) => seat.seatId === incomingSeatId);
     const incomingPowerOn = String(seatLike?.powerStatus || "").toLowerCase() === "on" || seatLike?.power === true;
 
@@ -535,7 +573,9 @@ export function useDashboard() {
 
     const existingIndex = seats.value.findIndex((seat) => seat.seatId === normalized.seatId);
     if (existingIndex === -1) {
-      seats.value = [...seats.value, normalized].sort((left, right) => Number(left.seatId ?? 0) - Number(right.seatId ?? 0));
+      seats.value = [...seats.value, normalized]
+        .filter((seat, index, array) => array.findIndex((item) => item.seatId === seat.seatId) === index)
+        .sort((left, right) => Number(left.seatId ?? 0) - Number(right.seatId ?? 0));
       return;
     }
 

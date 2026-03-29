@@ -74,7 +74,7 @@ const formatDuration = (seconds) => {
       >
         <div class="seat-card__head">
           <div class="seat-card__title-group">
-            <h3 class="seat-card__title">{{ props.seatLabel(seat.id ?? seat.seatId) }}</h3>
+            <h3 class="seat-card__title">{{ props.seatLabel(seat.seatCode ?? seat.id ?? seat.seatId) }}</h3>
             <p class="seat-card__status" :class="{ 'is-active': seat.occupied }">
               {{ props.seatStatusText(seat) }}
             </p>
