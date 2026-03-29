@@ -375,7 +375,7 @@ const formatDuration = (seconds) => {
     min-height: 0;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-auto-rows: minmax(228px, auto);
-    gap: 14px 10px;
+    gap: 0px 10px;
     align-content: start;
     padding-top: 10px;
     padding-right: 9px;
@@ -386,7 +386,7 @@ const formatDuration = (seconds) => {
   }
 
   .seat-card {
-    min-height: 228px;
+    min-height: 215px;
     padding: 16px 14px 14px;
     border-radius: 22px;
     position: relative;
