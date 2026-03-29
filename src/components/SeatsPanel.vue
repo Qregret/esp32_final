@@ -258,7 +258,6 @@ const formatDuration = (seconds) => {
   font-size: 0.86rem;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .seat-card__mono {
@@ -268,57 +267,52 @@ const formatDuration = (seconds) => {
     Menlo,
     Consolas,
     monospace;
-  color: var(--text-accent) !important;
+  color: var(--text-accent);
 }
 
 .seat-card__power {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
   margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.seat-card__power-label {
+.seat-card__power-label,
+.seat-card__charge-label {
   color: var(--text-soft);
-  font-size: 0.86rem;
-  white-space: nowrap;
+  font-size: 0.9rem;
 }
 
 .seat-card__switch {
-  width: 80px;
-  min-width: 70px;
-  min-height: 34px;
-  padding: 0 14px;
-  font-size: 0.72rem;
+  min-width: 98px;
+  padding: 10px 16px;
   border-radius: 999px;
   border: 1px solid rgba(51, 65, 85, 0.86);
-  background: rgba(30, 41, 59, 0.9);
-  color: #cbd5e1;
-  cursor: pointer;
+  background: rgba(30, 41, 59, 0.82);
+  color: var(--text-main);
+  font-size: 0.9rem;
   transition:
-    background 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease,
-    opacity 160ms ease;
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
 }
 
 .seat-card__switch.is-on {
   border-color: rgba(16, 185, 129, 0.22);
   background: rgba(16, 185, 129, 0.14);
-  color: #d1fae5;
+  color: #6ee7b7;
 }
 
-.seat-card__switch.is-pending,
-.seat-card__switch:disabled {
-  cursor: wait;
+.seat-card__switch.is-pending {
+  cursor: progress;
   opacity: 0.78;
-  pointer-events: none;
 }
 
 .seat-card__charge {
   margin-top: auto;
-  padding-top: 8px;
+  padding-top: 14px;
 }
 
 .seat-card__charge-row {
@@ -326,145 +320,26 @@ const formatDuration = (seconds) => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: var(--text-soft);
-  font-size: 0.78rem;
-}
-
-.seat-card__charge-label {
-  white-space: nowrap;
+  margin-bottom: 8px;
 }
 
 .seat-card__charge-track {
-  margin-top: 8px;
-  height: 6px;
+  width: 100%;
+  height: 8px;
   border-radius: 999px;
-  background: rgba(30, 41, 59, 0.92);
+  background: rgba(51, 65, 85, 0.72);
   overflow: hidden;
 }
 
 .seat-card__charge-bar {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #10b981, #22d3ee);
+  background: linear-gradient(90deg, #22d3ee, #34d399);
 }
 
-@media (max-width: 767px) {
-  .seats-panel {
-    height: 100%;
-    padding: 18px 14px 16px;
-    overflow: hidden;
-  }
-
-  .seats-panel__header {
-    flex: 0 0 auto;
-    margin-bottom: 14px;
-  }
-
-  .seats-panel__header .section-title {
-    font-size: 1.06rem;
-    line-height: 1.2;
-  }
-
-  .seats-panel__header .section-subtitle {
-    margin-top: 0.25rem;
-    font-size: 0.78rem;
-    color: rgba(148, 163, 184, 0.88);
-  }
-
-  .seats-panel__summary {
-    font-size: 0.9rem;
-    line-height: 1.35;
-  }
-
-  .seats-panel__error {
-    margin-bottom: 10px;
-    padding: 9px 11px;
-    font-size: 0.74rem;
-  }
-
+@media (max-width: 900px) {
   .seats-grid {
-    flex: 1 1 auto;
-    min-height: 0;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-rows: minmax(228px, auto);
-    gap: 14px 10px;
-    align-content: start;
-    padding-top: 10px;
-    padding-bottom: 28px;
-    padding-right: 9px;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    scroll-padding-bottom: 28px;
-  }
-
-  .seat-card {
-    min-height: 228px;
-    padding: 16px 14px 14px;
-    border-radius: 22px;
-    position: relative;
-    z-index: 0;
-  }
-
-  .seat-card:hover {
-    transform: translateY(0);
-    z-index: 2;
-  }
-
-  .seat-card__head {
-    margin-bottom: 12px;
-  }
-
-  .seat-card__title {
-    font-size: 0.98rem;
-    line-height: 1.08;
-  }
-
-  .seat-card__status {
-    margin-top: 6px;
-    font-size: 0.8rem;
-  }
-
-  .seat-card__relay {
-    display: none;
-  }
-
-  .seat-card__meta {
-    gap: 10px;
-  }
-
-  .seat-card__meta-label,
-  .seat-card__meta-value,
-  .seat-card__power-label {
-    font-size: 0.78rem;
-  }
-
-  .seat-card__power {
-    margin-top: 12px;
-    gap: 8px;
-  }
-
-  .seat-card__switch {
-    width: 61px;
-    min-width: 30px;
-    min-height: 36px;
-    padding: 0 10px;
-    margin-right: -6px;
-    font-size: 0.74rem;
-  }
-
-  .seat-card__charge {
-    margin-top: 8px;
-    padding-top: 4px;
-  }
-
-  .seat-card__charge-row {
-    font-size: 0.76rem;
-  }
-
-  .seat-card__charge-track {
-    margin-top: 8px;
-    height: 6px;
+    grid-template-columns: 1fr;
   }
 }
 </style>

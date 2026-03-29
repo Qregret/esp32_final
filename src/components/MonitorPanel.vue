@@ -261,30 +261,29 @@ watch(
 }
 
 .logs-card__item {
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(51, 65, 85, 0.55);
-  font-size: 0.82rem;
-  line-height: 1.6;
-  color: #dbeafe;
-  word-break: break-all;
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.38);
 }
 
 .logs-card__item:last-child {
-  border-bottom: 0;
+  border-bottom: none;
 }
 
 .logs-card__time {
-  color: var(--text-dim);
+  color: #94a3b8;
 }
 
 .logs-card__tag {
-  margin-left: 10px;
   font-weight: 700;
 }
 
 .logs-card__message {
-  margin-left: 10px;
-  color: #cbd5e1;
+  word-break: break-word;
+  color: var(--text-main);
 }
 
 .log-cyan {
@@ -292,7 +291,7 @@ watch(
 }
 
 .log-amber {
-  color: #fbbf24;
+  color: #f59e0b;
 }
 
 .log-blue {
@@ -300,7 +299,7 @@ watch(
 }
 
 .log-green {
-  color: #4ade80;
+  color: #34d399;
 }
 
 .log-fuchsia {
@@ -311,106 +310,14 @@ watch(
   color: #cbd5e1;
 }
 
-@media (min-width: 1280px) {
-  .ops-panel {
-    height: 100%;
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .ops-panel__logs {
-    min-height: 0;
-  }
-}
-
-@media (max-width: 767px) {
-  .ops-panel {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .ops-panel__env,
-  .ops-panel__logs {
-    padding: 18px;
-  }
-
-  .ops-panel__env {
-    flex: 0 0 auto;
-  }
-
-  .ops-panel__header .section-title,
-  .logs-card__head .section-title {
-    font-size: 1.02rem;
-    line-height: 1.2;
-  }
-
-  .ops-panel__header .section-subtitle,
-  .logs-card__head .section-subtitle {
-    margin-top: 0.28rem;
-    font-size: 0.78rem;
-    color: rgba(148, 163, 184, 0.88);
-  }
-
+@media (max-width: 900px) {
   .sensor-grid {
-    gap: 12px;
-    align-items: stretch;
-  }
-
-  .sensor-card {
-    min-height: 188px;
-    padding: 12px;
-    border-radius: var(--radius-md);
-  }
-
-  .sensor-card__head {
-    font-size: 0.82rem;
-  }
-
-  .sensor-gauge {
-    width: 94px;
-    height: 94px;
-  }
-
-  .sensor-gauge::after {
-    inset: 10px;
-  }
-
-  .sensor-gauge__inner strong {
-    font-size: 1.42rem;
-  }
-
-  .sensor-gauge__inner span {
-    font-size: 0.78rem;
-  }
-
-  .sensor-card__foot {
-    font-size: 0.64rem;
-  }
-
-  .ops-panel__logs {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-
-  .logs-card__head {
-    margin-bottom: 10px;
-  }
-
-  .logs-card__count {
-    min-height: 34px;
-    padding: 0 12px;
-    font-size: 0.72rem;
-  }
-
-  .logs-card__list {
-    padding: 10px 12px 16px;
-    border-radius: var(--radius-md);
+    grid-template-columns: 1fr;
   }
 
   .logs-card__item {
-    font-size: 0.72rem;
-    line-height: 1.55;
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 }
 </style>
