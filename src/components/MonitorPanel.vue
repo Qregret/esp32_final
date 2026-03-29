@@ -43,11 +43,22 @@ watch(
         <article class="panel-card sensor-card">
           <div class="sensor-card__head">
             <span>温度</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" width="20" height="20" class="sensor-card__icon sensor-card__icon--temp">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              width="20"
+              height="20"
+              class="sensor-card__icon sensor-card__icon--temp"
+            >
               <path d="M14 14.76V5a2 2 0 1 0-4 0v9.76a4 4 0 1 0 4 0z" />
             </svg>
           </div>
-          <div class="sensor-gauge" :style="{ '--gauge-value': `${props.environment.tempGauge}%`, '--gauge-start': '#fb7185', '--gauge-end': '#22d3ee' }">
+          <div
+            class="sensor-gauge"
+            :style="{ '--gauge-value': `${props.environment.tempGauge}%`, '--gauge-start': '#fb7185', '--gauge-end': '#22d3ee' }"
+          >
             <div class="sensor-gauge__inner">
               <strong>{{ props.environment.temperature.toFixed(1) }}</strong>
               <span>°C</span>
@@ -59,11 +70,22 @@ watch(
         <article class="panel-card sensor-card">
           <div class="sensor-card__head">
             <span>湿度</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" width="20" height="20" class="sensor-card__icon sensor-card__icon--humid">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              width="20"
+              height="20"
+              class="sensor-card__icon sensor-card__icon--humid"
+            >
               <path d="M12 3C9 7 6 10.2 6 14a6 6 0 0 0 12 0c0-3.8-3-7-6-11z" />
             </svg>
           </div>
-          <div class="sensor-gauge" :style="{ '--gauge-value': `${props.environment.humidityGauge}%`, '--gauge-start': '#38bdf8', '--gauge-end': '#34d399' }">
+          <div
+            class="sensor-gauge"
+            :style="{ '--gauge-value': `${props.environment.humidityGauge}%`, '--gauge-start': '#38bdf8', '--gauge-end': '#34d399' }"
+          >
             <div class="sensor-gauge__inner">
               <strong>{{ props.environment.humidity.toFixed(1) }}</strong>
               <span>%</span>
@@ -98,9 +120,11 @@ watch(
 
 <style scoped>
 .ops-panel {
-  display: grid;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
-  min-width: 0;
 }
 
 .ops-panel__env,
@@ -109,6 +133,7 @@ watch(
 }
 
 .ops-panel__env {
+  flex: 0 0 auto;
   padding: 18px;
 }
 
@@ -194,6 +219,7 @@ watch(
 }
 
 .ops-panel__logs {
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -243,6 +269,8 @@ watch(
   border: 1px solid rgba(51, 65, 85, 0.72);
   background: rgba(2, 6, 23, 0.58);
   padding: 12px 14px 18px;
+  font-size: 14px;
+
   font-family:
     ui-monospace,
     "SFMono-Regular",
@@ -261,12 +289,11 @@ watch(
 }
 
 .logs-card__item {
-  display: grid;
-  grid-template-columns: auto auto 1fr;
-  gap: 10px;
-  align-items: start;
   padding: 10px 0;
   border-bottom: 1px solid rgba(51, 65, 85, 0.38);
+  text-align: left;
+  line-height: 1.65;
+  color: var(--text-main);
 }
 
 .logs-card__item:last-child {
@@ -274,15 +301,21 @@ watch(
 }
 
 .logs-card__time {
+  display: inline;
+  margin-right: 10px;
   color: #94a3b8;
 }
 
 .logs-card__tag {
+  display: inline;
+  margin-right: 10px;
   font-weight: 700;
 }
 
 .logs-card__message {
+  display: inline;
   word-break: break-word;
+  white-space: normal;
   color: var(--text-main);
 }
 
@@ -310,14 +343,19 @@ watch(
   color: #cbd5e1;
 }
 
-@media (max-width: 900px) {
-  .sensor-grid {
-    grid-template-columns: 1fr;
+@media (max-width: 767px) {
+  .ops-panel__env,
+  .ops-panel__logs {
+    padding: 16px;
   }
 
-  .logs-card__item {
-    grid-template-columns: 1fr;
-    gap: 4px;
+  .sensor-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .sensor-card {
+    min-height: 228px;
   }
 }
 </style>

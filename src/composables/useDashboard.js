@@ -375,6 +375,7 @@ export function useDashboard() {
 
   const seatCharge = (seat) => {
     if (!seat.power || !seat.tracking) return 0;
+    if (Math.max(0, Number(seat.seconds) || 0) < 60) return 0;
     const hourlyRate = Number(seat.hourlyRate ?? 2);
     const billableHours = Math.max(1, Math.ceil(Math.max(0, seat.seconds) / 3600));
     return Number((billableHours * hourlyRate).toFixed(2));
