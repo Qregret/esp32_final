@@ -24,6 +24,14 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  seatActionError: {
+    type: String,
+    default: "",
+  },
+  isSeatPending: {
+    type: Function,
+    required: true,
+  },
 });
 
 const emit = defineEmits(["toggle-seat"]);
@@ -33,9 +41,10 @@ const toggleSeat = (seat) => {
 };
 
 const formatDuration = (seconds) => {
-  const hours = String(Math.floor(seconds / 3600)).padStart(2, "0");
-  const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
-  const remain = String(seconds % 60).padStart(2, "0");
+  const safeSeconds = Math.max(0, Number(seconds) || 0);
+  const hours = String(Math.floor(safeSeconds / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((safeSeconds % 3600) / 60)).padStart(2, "0");
+  const remain = String(safeSeconds % 60).padStart(2, "0");
   return `${hours}:${minutes}:${remain}`;
 };
 </script>
@@ -52,16 +61,20 @@ const formatDuration = (seconds) => {
       </div>
     </div>
 
+    <p v-if="props.seatActionError" class="seats-panel__error">
+      {{ props.seatActionError }}
+    </p>
+
     <div class="seats-grid">
       <article
         v-for="seat in props.seats"
-        :key="seat.id"
+        :key="seat.seatId ?? seat.id"
         class="panel-card card-lift seat-card"
         :class="{ 'is-active': seat.occupied }"
       >
         <div class="seat-card__head">
           <div class="seat-card__title-group">
-            <h3 class="seat-card__title">{{ props.seatLabel(seat.id) }}</h3>
+            <h3 class="seat-card__title">{{ props.seatLabel(seat.seatCode ?? seat.id ?? seat.seatId) }}</h3>
             <p class="seat-card__status" :class="{ 'is-active': seat.occupied }">
               {{ props.seatStatusText(seat) }}
             </p>
@@ -86,8 +99,15 @@ const formatDuration = (seconds) => {
 
         <div class="seat-card__power">
           <span class="seat-card__power-label">台灯 / 电源</span>
-          <button class="seat-card__switch" :class="{ 'is-on': seat.power }" type="button" @click="toggleSeat(seat)">
-            {{ seat.power ? "电源开" : "电源关" }}
+          <button
+            class="seat-card__switch"
+            :class="{ 'is-on': seat.power, 'is-pending': props.isSeatPending(seat) }"
+            :disabled="props.isSeatPending(seat)"
+            :aria-busy="props.isSeatPending(seat)"
+            type="button"
+            @click="toggleSeat(seat)"
+          >
+            {{ props.isSeatPending(seat) ? "处理中" : seat.power ? "电源开" : "电源关" }}
           </button>
         </div>
 
@@ -131,6 +151,17 @@ const formatDuration = (seconds) => {
   font-weight: 700;
 }
 
+.seats-panel__error {
+  margin: -2px 0 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  background: rgba(127, 29, 29, 0.16);
+  color: #fecaca;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
 .seats-grid {
   flex: 1 1 auto;
   min-height: 0;
@@ -145,6 +176,7 @@ const formatDuration = (seconds) => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  height: 200px;
   padding: 14px 14px 12px;
   border-radius: var(--radius-lg);
 }
@@ -273,6 +305,11 @@ const formatDuration = (seconds) => {
   color: #d1fae5;
 }
 
+.seat-card__switch.is-pending {
+  cursor: progress;
+  opacity: 0.78;
+}
+
 .seat-card__charge {
   margin-top: auto;
   padding-top: 8px;
@@ -338,10 +375,9 @@ const formatDuration = (seconds) => {
     min-height: 0;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-auto-rows: minmax(228px, auto);
-    gap: 14px 10px;
+    gap: 0px 10px;
     align-content: start;
     padding-top: 10px;
-    padding-bottom: 28px;
     padding-right: 9px;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -350,7 +386,7 @@ const formatDuration = (seconds) => {
   }
 
   .seat-card {
-    min-height: 228px;
+    min-height: 215px;
     padding: 16px 14px 14px;
     border-radius: 22px;
     position: relative;
@@ -400,7 +436,7 @@ const formatDuration = (seconds) => {
     min-width: 30px;
     min-height: 36px;
     padding: 0 10px;
-    margin-right:-6px;
+    margin-right: -6px;
     font-size: 0.74rem;
   }
 

@@ -43,11 +43,22 @@ watch(
         <article class="panel-card sensor-card">
           <div class="sensor-card__head">
             <span>温度</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" width="20" height="20" class="sensor-card__icon sensor-card__icon--temp">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              width="20"
+              height="20"
+              class="sensor-card__icon sensor-card__icon--temp"
+            >
               <path d="M14 14.76V5a2 2 0 1 0-4 0v9.76a4 4 0 1 0 4 0z" />
             </svg>
           </div>
-          <div class="sensor-gauge" :style="{ '--gauge-value': `${props.environment.tempGauge}%`, '--gauge-start': '#fb7185', '--gauge-end': '#22d3ee' }">
+          <div
+            class="sensor-gauge"
+            :style="{ '--gauge-value': `${props.environment.tempGauge}%`, '--gauge-start': '#fb7185', '--gauge-end': '#22d3ee' }"
+          >
             <div class="sensor-gauge__inner">
               <strong>{{ props.environment.temperature.toFixed(1) }}</strong>
               <span>°C</span>
@@ -59,11 +70,22 @@ watch(
         <article class="panel-card sensor-card">
           <div class="sensor-card__head">
             <span>湿度</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" width="20" height="20" class="sensor-card__icon sensor-card__icon--humid">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              width="20"
+              height="20"
+              class="sensor-card__icon sensor-card__icon--humid"
+            >
               <path d="M12 3C9 7 6 10.2 6 14a6 6 0 0 0 12 0c0-3.8-3-7-6-11z" />
             </svg>
           </div>
-          <div class="sensor-gauge" :style="{ '--gauge-value': `${props.environment.humidityGauge}%`, '--gauge-start': '#38bdf8', '--gauge-end': '#34d399' }">
+          <div
+            class="sensor-gauge"
+            :style="{ '--gauge-value': `${props.environment.humidityGauge}%`, '--gauge-start': '#38bdf8', '--gauge-end': '#34d399' }"
+          >
             <div class="sensor-gauge__inner">
               <strong>{{ props.environment.humidity.toFixed(1) }}</strong>
               <span>%</span>
@@ -98,9 +120,11 @@ watch(
 
 <style scoped>
 .ops-panel {
-  display: grid;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
-  min-width: 0;
 }
 
 .ops-panel__env,
@@ -109,6 +133,7 @@ watch(
 }
 
 .ops-panel__env {
+  flex: 0 0 auto;
   padding: 18px;
 }
 
@@ -194,6 +219,7 @@ watch(
 }
 
 .ops-panel__logs {
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -243,6 +269,8 @@ watch(
   border: 1px solid rgba(51, 65, 85, 0.72);
   background: rgba(2, 6, 23, 0.58);
   padding: 12px 14px 18px;
+  font-size: 14px;
+
   font-family:
     ui-monospace,
     "SFMono-Regular",
@@ -261,30 +289,34 @@ watch(
 }
 
 .logs-card__item {
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(51, 65, 85, 0.55);
-  font-size: 0.82rem;
-  line-height: 1.6;
-  color: #dbeafe;
-  word-break: break-all;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.38);
+  text-align: left;
+  line-height: 1.65;
+  color: var(--text-main);
 }
 
 .logs-card__item:last-child {
-  border-bottom: 0;
+  border-bottom: none;
 }
 
 .logs-card__time {
-  color: var(--text-dim);
+  display: inline;
+  margin-right: 10px;
+  color: #94a3b8;
 }
 
 .logs-card__tag {
-  margin-left: 10px;
+  display: inline;
+  margin-right: 10px;
   font-weight: 700;
 }
 
 .logs-card__message {
-  margin-left: 10px;
-  color: #cbd5e1;
+  display: inline;
+  word-break: break-word;
+  white-space: normal;
+  color: var(--text-main);
 }
 
 .log-cyan {
@@ -292,7 +324,7 @@ watch(
 }
 
 .log-amber {
-  color: #fbbf24;
+  color: #f59e0b;
 }
 
 .log-blue {
@@ -300,7 +332,7 @@ watch(
 }
 
 .log-green {
-  color: #4ade80;
+  color: #34d399;
 }
 
 .log-fuchsia {
@@ -311,106 +343,19 @@ watch(
   color: #cbd5e1;
 }
 
-@media (min-width: 1280px) {
-  .ops-panel {
-    height: 100%;
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .ops-panel__logs {
-    min-height: 0;
-  }
-}
-
 @media (max-width: 767px) {
-  .ops-panel {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
   .ops-panel__env,
   .ops-panel__logs {
-    padding: 18px;
-  }
-
-  .ops-panel__env {
-    flex: 0 0 auto;
-  }
-
-  .ops-panel__header .section-title,
-  .logs-card__head .section-title {
-    font-size: 1.02rem;
-    line-height: 1.2;
-  }
-
-  .ops-panel__header .section-subtitle,
-  .logs-card__head .section-subtitle {
-    margin-top: 0.28rem;
-    font-size: 0.78rem;
-    color: rgba(148, 163, 184, 0.88);
+    padding: 16px;
   }
 
   .sensor-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
-    align-items: stretch;
   }
 
   .sensor-card {
-    min-height: 188px;
-    padding: 12px;
-    border-radius: var(--radius-md);
-  }
-
-  .sensor-card__head {
-    font-size: 0.82rem;
-  }
-
-  .sensor-gauge {
-    width: 94px;
-    height: 94px;
-  }
-
-  .sensor-gauge::after {
-    inset: 10px;
-  }
-
-  .sensor-gauge__inner strong {
-    font-size: 1.42rem;
-  }
-
-  .sensor-gauge__inner span {
-    font-size: 0.78rem;
-  }
-
-  .sensor-card__foot {
-    font-size: 0.64rem;
-  }
-
-  .ops-panel__logs {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-
-  .logs-card__head {
-    margin-bottom: 10px;
-  }
-
-  .logs-card__count {
-    min-height: 34px;
-    padding: 0 12px;
-    font-size: 0.72rem;
-  }
-
-  .logs-card__list {
-    padding: 10px 12px 16px;
-    border-radius: var(--radius-md);
-  }
-
-  .logs-card__item {
-    font-size: 0.72rem;
-    line-height: 1.55;
+    min-height: 228px;
   }
 }
 </style>
