@@ -1,5 +1,8 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-const DASHBOARD_WS_URL = (import.meta.env.VITE_DASHBOARD_WS_URL || "").trim();
+// const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+// const DASHBOARD_WS_URL = (import.meta.env.VITE_DASHBOARD_WS_URL || "").trim();
+
+const API_BASE_URL = "";
+const DASHBOARD_WS_URL = "/ws/stream/events"; // 假设你的 websocket 路径是这个
 
 const EVENT_NAMES = [
   "auth-event-updated",

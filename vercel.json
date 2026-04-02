@@ -1,0 +1,12 @@
+{
+    "rewrites": [
+      {
+        "source": "/api/:path*",
+        "destination": "http://8.155.145.187:8080/api/:path*"
+      },
+      {
+        "source": "/ws/:path*",
+        "destination": "http://8.155.145.187:8080/ws/:path*"
+      }
+    ]
+  }
